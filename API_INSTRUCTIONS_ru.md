@@ -1,6 +1,6 @@
 # Инструкции по настройке YouTube Data API v3
 
-> 🌍 **Версии на языках**: [🇷🇺 Русский](API_INSTRUCTIONS_ru.md) | [🇺🇸 English](API_INSTRUCTIONS.md)
+> **Версии на языках**: [Русский](API_INSTRUCTIONS_ru.md) | [English](API_INSTRUCTIONS.md)
 
 ## Шаг 1: Создание проекта в Google Cloud Console
 

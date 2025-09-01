@@ -1,12 +1,23 @@
-# YouTube History Analyzer 🎬
+# YouTube History Analyzer
 
 **YouTube viewing history analyzer with TUI interface**
 
 Full-featured tool for analyzing your YouTube viewing history with data export capabilities, video duration retrieval, and interactive report generation.
 
-> 📸 **Interface screenshots and instructions** are located in the [`images/`](images/) folder for visual understanding of the workflow.
+> **Language versions**: [Русский](README_ru.md) | [English](README.md)
 
-> 🌍 **Language versions**: [🇷🇺 Русский](README_ru.md) | [🇺🇸 English](README.md)
+## Table of Contents
+
+- [Key Features](#key-features)
+- [Installation and Setup](#installation-and-setup)
+- [Getting Data from Google Takeout](#getting-data-from-google-takeout)
+- [Streamlined TUI Interface](#streamlined-tui-interface)
+- [Data Structure](#data-structure)
+- [Generated Reports](#generated-reports)
+- [Technical Details](#technical-details)
+- [Project Structure](#project-structure)
+- [Usage Examples](#usage-examples)
+- [Results](#results)
 
 ## Key Features
 
@@ -33,7 +44,7 @@ Full-featured tool for analyzing your YouTube viewing history with data export c
 - **CSV file** for Excel/Google Sheets
 - **Summary statistics** in JSON
 
-### **🌍 Multilingual Support**
+### **Multilingual Support**
 - **Russian and English** languages
 
 ## Installation and Setup
@@ -62,7 +73,7 @@ Detailed instructions are described in [API_INSTRUCTIONS.md](API_INSTRUCTIONS.md
 - **Request**: 1 unit per video
 - **Recommendation**: start with 100-1000 video sample
 
-### Getting Data from Google Takeout
+## Getting Data from Google Takeout
 
 To work with the analyzer, you need to export your YouTube viewing history from Google Takeout.
 
@@ -175,9 +186,9 @@ The analyzer provides a convenient text interface with automation of main operat
 - **YouTube Data API v3** for reliability
 - **Configurable sample size** (default 100)
 - **Progress indicators** with current statistics:
-  - 📊 Current average time
-  - 🎯 Number of processed videos
-  - 📈 Completion percentage
+  - Current average time
+  - Number of processed videos
+  - Completion percentage
 - **Automatic saving** to CSV
 
 ### **Option 3: Generate HTML Report**
@@ -213,7 +224,7 @@ The analyzer provides a convenient text interface with automation of main operat
 
 ## Generated Reports
 
-### **📊 HTML Report with Graphs**
+### **HTML Report with Graphs**
 - **Monthly activity** trends
 - **Cumulative watch time** over time
 - **Day of week activity** patterns
@@ -221,19 +232,19 @@ The analyzer provides a convenient text interface with automation of main operat
 - **Top channels** with statistics
 - **Duration statistics** (if available)
 
-### **📈 Interactive Charts**
+### **Interactive Charts**
 - **Plotly-based** interactive graphs
 - **Zoom and pan** capabilities
 - **Hover information** with details
 - **Export to PNG** functionality
 
-### **🏆 Statistics Dashboard**
+### **Statistics Dashboard**
 - **Main metrics** in visual cards
 - **Channel rankings** with counts
 - **Time analysis** with estimates
 - **Data coverage** information
 
-### **📋 Additional Information**
+### **Additional Information**
 - **Analysis period** with dates
 - **Data sources** with record counts
 - **Filtering** and deduplication
@@ -279,7 +290,7 @@ youtube-history-analytics/
 
 ## Usage Examples
 
-### **🚀 Quick Start**
+### **Quick Start**
 ```bash
 # 1. Install dependencies
 pip3 install -r requirements.txt
@@ -296,14 +307,14 @@ python3 youtube_analyzer.py
 # 7. Generate HTML report
 ```
 
-### **📊 Typical Analysis Process**
+### **Typical Analysis Process**
 1. **Load data** → automatic combination of two sources
 2. **Get duration** → sample 100-1000 videos to start
 3. **Generate report** → create interactive graphs
 4. **Export CSV** → data for Excel/Google Sheets
 5. **View results** → analyze viewing habits
 
-### **🎯 Result Analysis**
+### **Result Analysis**
 - **Peak hours**: when you most often watch YouTube
 - **Favorite days**: which days of week have higher activity
 - **Trends**: how activity changes by months
@@ -323,4 +334,4 @@ After analysis, you will have:
 
 ---
 
-**🎬 Analyze your YouTube history with pleasure and accurate time data!**
+**Analyze your YouTube history with pleasure and accurate time data!**
