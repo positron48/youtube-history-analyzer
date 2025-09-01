@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 YouTube History Analyzer
-Анализатор истории просмотров YouTube с TUI интерфейсом
+YouTube History Analyzer with TUI interface
 """
 
 import json
@@ -17,6 +17,10 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
 import warnings
+import requests
+import time
+import random
+from locales import get_text, get_csv_columns, get_day_of_week, get_month_name
 warnings.filterwarnings('ignore')
 
 class YouTubeAnalyzer:
@@ -31,7 +35,31 @@ class YouTubeAnalyzer:
         self.video_durations = {}
         self.output_dir = Path("youtube_analysis_output")
         self.output_dir.mkdir(exist_ok=True)
+        self.language = 'ru'  # По умолчанию русский
     
+    def select_language(self) -> None:
+        """Выбор языка интерфейса"""
+        self.console.print(f"\n[bold blue]{get_text('en', 'welcome')}[/bold blue]")
+        self.console.print(f"\n[bold]{get_text('en', 'select_language')}[/bold]")
+        self.console.print(f"1. {get_text('en', 'language_ru')}")
+        self.console.print(f"2. {get_text('en', 'language_en')}")
+        
+        while True:
+            choice = input("\nВыберите язык / Select language (1-2): ").strip()
+            if choice == '1':
+                self.language = 'ru'
+                self.console.print(f"\n[green]✓ Выбран русский язык[/green]")
+                break
+            elif choice == '2':
+                self.language = 'en'
+                self.console.print(f"\n[green]✓ English language selected[/green]")
+                break
+            else:
+                self.console.print(f"[red]{get_text('en', 'invalid_choice')}[/red]")
+        
+        # Показываем приветствие на выбранном языке
+        self.console.print(f"\n[bold blue]{get_text(self.language, 'welcome')}[/bold blue]\n")
+
     def load_data_source(self, file_path: str, source_type: str) -> bool:
         """Загрузка данных из указанного источника"""
         try:
@@ -45,14 +73,14 @@ class YouTubeAnalyzer:
             
             if isinstance(data, list):
                 self.data_sources[source_type] = data
-                self.console.print(f"✓ Загружено {len(data)} записей из {source_type}")
+                self.console.print(f"✓ {get_text(self.language, 'loaded_records', count=len(data), source=source_type)}")
                 return True
             else:
                 self.console.print(f"[red]Ошибка: файл {source_type} не содержит список[/red]")
                 return False
                 
         except json.JSONDecodeError as e:
-            self.console.print(f"[red]Ошибка парсинга JSON в {source_type}: {e}[/red]")
+            self.console.print(f"[red]{get_text(self.language, 'error_loading_file', error=e)}[/red]")
             return False
         except Exception as e:
             self.console.print(f"[red]Ошибка загрузки {source_type}: {e}[/red]")
@@ -83,7 +111,7 @@ class YouTubeAnalyzer:
     
     def merge_data_sources(self) -> None:
         """Объединение данных из разных источников без дублей"""
-        self.console.print("[bold blue]Объединяю данные из разных источников...[/bold blue]")
+        self.console.print(f"[bold blue]{get_text(self.language, 'merging_sources')}[/bold blue]")
         
         unique_records = {}
         duplicates_count = 0
@@ -94,7 +122,7 @@ class YouTubeAnalyzer:
             TextColumn("[progress.description]{task.description}"),
             console=self.console
         ) as progress:
-            task = progress.add_task("Дедупликация записей...", total=total_items)
+            task = progress.add_task(get_text(self.language, 'deduplication'), total=total_items)
             
             for source_type, data in self.data_sources.items():
                 if not data:
@@ -132,12 +160,12 @@ class YouTubeAnalyzer:
                     progress.advance(task)
             
             self.data = list(unique_records.values())
-            self.console.print(f"[green]✓ Объединено {len(self.data)} уникальных записей[/green]")
-            self.console.print(f"[yellow]Найдено и удалено {duplicates_count} дублей[/yellow]")
+            self.console.print(f"[green]✓ {get_text(self.language, 'merged_unique', count=len(self.data))}[/green]")
+            self.console.print(f"[yellow]{get_text(self.language, 'found_duplicates', count=duplicates_count)}[/yellow]")
     
     def process_data(self) -> None:
         """Обработка данных истории"""
-        self.console.print("[bold blue]Обрабатываю данные...[/bold blue]")
+        self.console.print(f"[bold blue]{get_text(self.language, 'processing_data')}[/bold blue]")
         
         if len([data for data in self.data_sources.values() if data]) > 1:
             self.merge_data_sources()
@@ -154,7 +182,7 @@ class YouTubeAnalyzer:
             TextColumn("[progress.description]{task.description}"),
             console=self.console
         ) as progress:
-            task = progress.add_task("Обработка записей...", total=len(self.data))
+            task = progress.add_task(get_text(self.language, 'processing_records'), total=len(self.data))
             
             for item in self.data:
                 # Игнорируем YouTube Music
@@ -197,31 +225,31 @@ class YouTubeAnalyzer:
             self.df['month'] = self.df['timestamp'].dt.month
             self.df['year'] = self.df['timestamp'].dt.year
         
-        self.console.print(f"[green]✓ Обработано {len(self.df)} записей[/green]")
+        self.console.print(f"[green]✓ {get_text(self.language, 'processed_records', count=len(self.df))}[/green]")
     
     def get_durations(self, sample_size: int = 100) -> None:
         """Получение длительности видео для выборки"""
         if self.df is None or len(self.df) == 0:
-            self.console.print("[red]Нет данных для анализа![/red]")
+            self.console.print(f"[red]{get_text(self.language, 'no_data_loaded')}[/red]")
             return
         
-        self.console.print(f"[bold blue]Получаю длительность для {sample_size} видео...[/bold blue]")
+        self.console.print(f"[bold blue]{get_text(self.language, 'getting_durations', count=sample_size)}[/bold blue]")
         
         # Фильтруем видео с доступными каналами (не Unknown)
         available_videos = self.df[self.df['channel'] != 'Unknown'].copy()
         
         if len(available_videos) == 0:
-            self.console.print("[red]Нет доступных видео с известными каналами![/red]")
+            self.console.print(f"[red]{get_text(self.language, 'no_available_videos')}[/red]")
             return
         
         # Берем случайную выборку из доступных видео
         sample_size = min(sample_size, len(available_videos))
         sample = available_videos.sample(sample_size)
         
-        self.console.print(f"[blue]Выбрано {len(sample)} видео с доступными каналами[/blue]")
-        self.console.print(f"[blue]Всего доступных видео: {len(available_videos)}[/blue]")
+        self.console.print(f"[blue]{get_text(self.language, 'selected_videos', count=len(sample))}[/blue]")
+        self.console.print(f"[blue]{get_text(self.language, 'total_available', count=len(available_videos))}[/blue]")
         
-        # Получаем длительность через curl
+        # Получаем длительность через API
         self.get_durations_api(sample)
     
     def get_durations_ytdlp(self, sample_df) -> None:
@@ -358,15 +386,14 @@ class YouTubeAnalyzer:
     
     def show_api_instructions(self) -> None:
         """Показывает инструкции по настройке YouTube API"""
-        self.console.print("\n🍪 Инструкция по настройке YouTube API:")
-        self.console.print("1. Перейдите на https://console.developers.google.com/")
-        self.console.print("2. Создайте новый проект или выберите существующий")
-        self.console.print("3. Включите YouTube Data API v3")
-        self.console.print("4. Создайте учетные данные (API ключ)")
-        self.console.print("5. Скопируйте API ключ в файл youtube_api_key.txt")
-        self.console.print("6. Поместите файл в папку проекта")
-        self.console.print("7. Перезапустите анализатор")
-        self.console.print("\n[blue]Подробные инструкции: см. файл API_INSTRUCTIONS.md[/blue]")
+        self.console.print(f"\n{get_text(self.language, 'api_instructions_title')}:")
+        self.console.print(get_text(self.language, 'api_step_1'))
+        self.console.print(get_text(self.language, 'api_step_2'))
+        self.console.print(get_text(self.language, 'api_step_3'))
+        self.console.print(get_text(self.language, 'api_step_4'))
+        self.console.print(get_text(self.language, 'api_step_5'))
+        self.console.print(f"\n[blue]{get_text(self.language, 'api_quota_info')}[/blue]")
+        self.console.print(f"[yellow]{get_text(self.language, 'api_recommendation')}[/yellow]")
     
     def parse_iso_duration(self, duration_str: str) -> int:
         """Парсит длительность в формате ISO 8601 (PT3M7S) в секунды"""
@@ -427,8 +454,8 @@ class YouTubeAnalyzer:
                 self.show_api_instructions()
                 return
             
-            self.console.print("[green]✓ Используется YouTube Data API v3[/green]")
-            self.console.print(f"[blue]📋 Всего видео для обработки: {len(sample_df)}[/blue]")
+            self.console.print(f"[green]✓ {get_text(self.language, 'using_api')}[/green]")
+            self.console.print(f"[blue]📋 {get_text(self.language, 'total_videos', count=len(sample_df))}[/blue]")
             
             processed = 0
             total = len(sample_df)
@@ -438,7 +465,7 @@ class YouTubeAnalyzer:
                 TextColumn("[progress.description]{task.description}"),
                 console=self.console
             ) as progress:
-                task = progress.add_task("Получение длительности через API...", total=total)
+                task = progress.add_task(get_text(self.language, 'getting_durations', count=total), total=total)
                 
                 for _, row in sample_df.iterrows():
                     video_id = row['video_id']
@@ -477,18 +504,21 @@ class YouTubeAnalyzer:
                                         avg_minutes = int(current_avg // 60)
                                         avg_seconds = int(current_avg % 60)
                                         
-                                        progress.update(task, description=f"✓ {row['title'][:30]}... ({minutes}:{seconds:02d}) | Среднее: {avg_minutes}:{avg_seconds:02d}")
+                                        progress.update(task, description=get_text(self.language, 'duration_progress', 
+                                                                               title=row['title'][:30], 
+                                                                               duration=f"{minutes}:{seconds:02d}", 
+                                                                               avg_duration=f"{avg_minutes}:{avg_seconds:02d}"))
                                         
                                         # Показываем изменение среднего значения каждые 5 видео
                                         if len(self.video_durations) % 5 == 0:
-                                            self.console.print(f"[blue]📊 Текущее среднее: {avg_minutes}:{avg_seconds:02d} (на основе {len(self.video_durations)} видео)[/blue]")
+                                            self.console.print(f"[blue]📊 {get_text(self.language, 'current_average', avg_duration=f'{avg_minutes}:{avg_seconds:02d}', count=len(self.video_durations))}[/blue]")
                                         
                                         # Показываем общее количество каждые 10 видео
                                         if len(self.video_durations) % 10 == 0:
                                             total_processed = len(self.video_durations)
                                             total_remaining = total - total_processed
                                             progress_percent = (total_processed / total) * 100
-                                            self.console.print(f"[green]✅ Обработано: {total_processed}/{total} видео ({progress_percent:.1f}%) | Осталось: {total_remaining}[/green]")
+                                            self.console.print(f"[green]✅ {get_text(self.language, 'processed_count', processed=total_processed, total=total, percent=progress_percent, remaining=total_remaining)}[/green]")
                                     else:
                                         progress.update(task, description=f"❌ {row['title'][:30]}... (ошибка парсинга)")
                                 else:
@@ -526,7 +556,7 @@ class YouTubeAnalyzer:
                     # Небольшая задержка между запросами (API позволяет до 10,000 запросов в день)
                     time.sleep(0.1)
                 
-                self.console.print(f"\n[green]✓ Получена длительность для {len(self.video_durations)} из {total} видео[/green]")
+                self.console.print(f"\n[green]✓ {get_text(self.language, 'duration_complete', processed=len(self.video_durations), total=total)}[/green]")
                 
                 if self.video_durations:
                     self.show_duration_statistics()
@@ -784,7 +814,7 @@ class YouTubeAnalyzer:
         if not self.video_durations:
             return
         
-        self.console.print("\n[bold blue]📊 Статистика по длительности видео[/bold blue]")
+        self.console.print(f"\n[bold blue]{get_text(self.language, 'duration_stats_title')}[/bold blue]")
         
         durations = list(self.video_durations.values())
         total_duration = sum(durations)
@@ -799,46 +829,55 @@ class YouTubeAnalyzer:
         avg_seconds = avg_duration % 60
         
         # Создаем таблицу статистики
-        table = Table(title="Статистика длительности")
-        table.add_column("Параметр", style="cyan")
-        table.add_column("Значение", style="green")
+        table = Table(title=get_text(self.language, 'duration_stats_title'))
+        table.add_column(get_text(self.language, 'parameter'), style="cyan")
+        table.add_column(get_text(self.language, 'value'), style="green")
         
-        table.add_row("Всего видео с длительностью", str(len(durations)))
-        table.add_row("Общее время просмотра", f"{total_hours}ч {total_minutes}м {total_seconds}с")
-        table.add_row("Средняя длительность", f"{avg_minutes}м {avg_seconds}с")
-        table.add_row("Самое короткое видео", f"{min(durations) // 60}м {min(durations) % 60}с")
-        table.add_row("Самое длинное видео", f"{max(durations) // 60}м {max(durations) % 60}с")
+        table.add_row(get_text(self.language, 'total_videos_with_duration'), str(len(durations)))
+        table.add_row(get_text(self.language, 'total_watch_time'), f"{total_hours}ч {total_minutes}м {total_seconds}с")
+        table.add_row(get_text(self.language, 'average_duration'), f"{avg_minutes}м {avg_seconds}с")
+        table.add_row(get_text(self.language, 'shortest_video'), f"{min(durations) // 60}м {min(durations) % 60}с")
+        table.add_row(get_text(self.language, 'longest_video'), f"{max(durations) // 60}м {max(durations) % 60}с")
         
         self.console.print(table)
         
         # Показываем распределение по длительности
-        self.console.print("\n[bold blue]📈 Распределение по длительности[/bold blue]")
+        self.console.print(f"\n[bold blue]{get_text(self.language, 'duration_distribution')}[/bold blue]")
         
         # Группируем по диапазонам
         ranges = {
-            "0-5 мин": 0,
-            "5-15 мин": 0,
-            "15-30 мин": 0,
-            "30-60 мин": 0,
-            "60+ мин": 0
+            get_text(self.language, 'duration_range_0_5', count=0, percent=0.0): 0,
+            get_text(self.language, 'duration_range_5_15', count=0, percent=0.0): 0,
+            get_text(self.language, 'duration_range_15_30', count=0, percent=0.0): 0,
+            get_text(self.language, 'duration_range_30_60', count=0, percent=0.0): 0,
+            get_text(self.language, 'duration_range_60_plus', count=0, percent=0.0): 0
         }
         
         for duration in durations:
             minutes = duration // 60
             if minutes < 5:
-                ranges["0-5 мин"] += 1
+                ranges[get_text(self.language, 'duration_range_0_5', count=0, percent=0.0)] += 1
             elif minutes < 15:
-                ranges["5-15 мин"] += 1
+                ranges[get_text(self.language, 'duration_range_5_15', count=0, percent=0.0)] += 1
             elif minutes < 30:
-                ranges["15-30 мин"] += 1
+                ranges[get_text(self.language, 'duration_range_15_30', count=0, percent=0.0)] += 1
             elif minutes < 60:
-                ranges["30-60 мин"] += 1
+                ranges[get_text(self.language, 'duration_range_30_60', count=0, percent=0.0)] += 1
             else:
-                ranges["60+ мин"] += 1
+                ranges[get_text(self.language, 'duration_range_60_plus', count=0, percent=0.0)] += 1
         
         for range_name, count in ranges.items():
             percentage = (count / len(durations)) * 100
-            self.console.print(f"  {range_name}: {count} видео ({percentage:.1f}%)")
+            if "0-5" in range_name:
+                self.console.print(f"  {get_text(self.language, 'duration_range_0_5', count=count, percent=percentage)}")
+            elif "5-15" in range_name:
+                self.console.print(f"  {get_text(self.language, 'duration_range_5_15', count=count, percent=percentage)}")
+            elif "15-30" in range_name:
+                self.console.print(f"  {get_text(self.language, 'duration_range_15_30', count=count, percent=percentage)}")
+            elif "30-60" in range_name:
+                self.console.print(f"  {get_text(self.language, 'duration_range_30_60', count=count, percent=percentage)}")
+            else:
+                self.console.print(f"  {get_text(self.language, 'duration_range_60_plus', count=count, percent=percentage)}")
         
         # Сохраняем длительности в CSV для дальнейшего анализа
         if self.df is not None:
@@ -855,28 +894,28 @@ class YouTubeAnalyzer:
         
         watch_stats = self.calculate_total_watch_time()
         
-        self.console.print("\n[bold blue]⏰ СВОДКА ПО ВРЕМЕНИ ПРОСМОТРА[/bold blue]")
+        self.console.print(f"\n[bold blue]{get_text(self.language, 'watch_time_summary')}[/bold blue]")
         
         # Создаем таблицу сводки
-        summary_table = Table(title="Общее время просмотра")
-        summary_table.add_column("Параметр", style="cyan")
-        summary_table.add_column("Значение", style="green")
+        summary_table = Table(title=get_text(self.language, 'watch_time_summary'))
+        summary_table.add_column(get_text(self.language, 'parameter'), style="cyan")
+        summary_table.add_column(get_text(self.language, 'value'), style="green")
         
-        summary_table.add_row("Всего видео в истории", str(watch_stats['total_videos']))
-        summary_table.add_row("Видео с известной длительностью", str(len(self.video_durations)))
-        summary_table.add_row("Видео без данных о длительности", str(watch_stats['total_videos'] - len(self.video_durations)))
-        summary_table.add_row("Общее время (известные видео)", watch_stats['total_duration_formatted'])
-        summary_table.add_row("Средняя длительность видео", watch_stats['avg_duration_formatted'])
-        summary_table.add_row("Оценка общего времени", watch_stats['estimated_total_time_formatted'])
+        summary_table.add_row(get_text(self.language, 'total_videos_in_history'), str(watch_stats['total_videos']))
+        summary_table.add_row(get_text(self.language, 'total_videos_in_history'), str(len(self.video_durations)))
+        summary_table.add_row(get_text(self.language, 'videos_without_duration'), str(watch_stats['total_videos'] - len(self.video_durations)))
+        summary_table.add_row(get_text(self.language, 'total_time_known'), watch_stats['total_duration_formatted'])
+        summary_table.add_row(get_text(self.language, 'average_duration_videos'), watch_stats['avg_duration_formatted'])
+        summary_table.add_row(get_text(self.language, 'estimated_total_time'), watch_stats['estimated_total_time_formatted'])
         
         self.console.print(summary_table)
         
         # Дополнительная информация
         if watch_stats['total_videos'] > len(self.video_durations):
             coverage_percent = (len(self.video_durations) / watch_stats['total_videos']) * 100
-            self.console.print(f"\n[blue]📊 Покрытие данных: {coverage_percent:.1f}%[/blue]")
-            self.console.print(f"[yellow]⚠️ Для {watch_stats['total_videos'] - len(self.video_durations)} видео длительность неизвестна[/yellow]")
-            self.console.print(f"[yellow]   Общее время рассчитано с учетом оценки на основе средней длительности[/yellow]")
+            self.console.print(f"\n[blue]📊 {get_text(self.language, 'data_coverage', percent=coverage_percent)}[/blue]")
+            self.console.print(f"[yellow]⚠️ {get_text(self.language, 'duration_unknown_warning', count=watch_stats['total_videos'] - len(self.video_durations))}[/yellow]")
+            self.console.print(f"[yellow]   {get_text(self.language, 'estimated_time_note')}[/yellow]")
     
     def calculate_total_watch_time(self) -> dict:
         """Вычисляет общее время просмотра за исследуемый период"""
@@ -884,11 +923,11 @@ class YouTubeAnalyzer:
             return {
                 'total_videos': 0,
                 'total_duration': 0,
-                'total_duration_formatted': '0 часов 0 минут',
+                'total_duration_formatted': f'0 {get_text(self.language, "hours_minutes")}',
                 'avg_duration': 0,
-                'avg_duration_formatted': '0 минут',
+                'avg_duration_formatted': f'0 {get_text(self.language, "minutes")}',
                 'estimated_total_time': 0,
-                'estimated_total_time_formatted': '0 часов 0 минут'
+                'estimated_total_time_formatted': f'0 {get_text(self.language, "hours_minutes")}'
             }
         
         # Время для видео с известной длительностью
@@ -924,24 +963,24 @@ class YouTubeAnalyzer:
     def format_duration(self, seconds: int) -> str:
         """Форматирует длительность в секундах в читаемый вид"""
         if seconds < 60:
-            return f"{int(seconds)} секунд"
+            return f"{int(seconds)} {get_text(self.language, 'seconds')}"
         elif seconds < 3600:
             minutes = int(seconds // 60)
             remaining_seconds = int(seconds % 60)
             if remaining_seconds == 0:
-                return f"{minutes} минут"
+                return f"{minutes} {get_text(self.language, 'minutes')}"
             else:
-                return f"{minutes} минут {remaining_seconds} секунд"
+                return f"{minutes} {get_text(self.language, 'minutes')} {remaining_seconds} {get_text(self.language, 'seconds')}"
         else:
             hours = int(seconds // 3600)
             remaining_minutes = int((seconds % 3600) // 60)
             remaining_seconds = int(seconds % 60)
             if remaining_minutes == 0 and remaining_seconds == 0:
-                return f"{hours} часов"
+                return f"{hours} {get_text(self.language, 'hours')}"
             elif remaining_seconds == 0:
-                return f"{hours} часов {remaining_minutes} минут"
+                return f"{hours} {get_text(self.language, 'hours')} {remaining_minutes} {get_text(self.language, 'minutes')}"
             else:
-                return f"{hours} часов {remaining_minutes} минут {remaining_seconds} секунд"
+                return f"{hours} {get_text(self.language, 'hours')} {remaining_minutes} {get_text(self.language, 'minutes')} {remaining_seconds} {get_text(self.language, 'seconds')}"
     
     def save_durations_to_csv(self) -> None:
         """Сохранение длительностей видео в CSV"""
@@ -970,16 +1009,16 @@ class YouTubeAnalyzer:
             csv_path = self.output_dir / "video_durations.csv"
             durations_df.to_csv(csv_path, index=False, encoding='utf-8-sig')
             
-            self.console.print(f"\n[green]✓ Длительности сохранены в: {csv_path}[/green]")
-            self.console.print(f"[blue]Размер файла: {csv_path.stat().st_size / 1024:.1f} KB[/blue]")
+            self.console.print(f"\n[green]✓ {get_text(self.language, 'duration_saved', path=csv_path)}[/green]")
+            self.console.print(f"[blue]{get_text(self.language, 'file_size', size=f'{csv_path.stat().st_size / 1024:.1f} KB')}[/blue]")
     
     def create_plots(self) -> None:
         """Создание графиков"""
         if self.df is None or len(self.df) == 0:
-            self.console.print("[red]Нет данных для создания графиков![/red]")
+            self.console.print(f"[red]{get_text(self.language, 'no_data_for_plots')}[/red]")
             return
         
-        self.console.print("[bold blue]Создаю графики...[/bold blue]")
+        self.console.print(f"[bold blue]{get_text(self.language, 'creating_plots')}[/bold blue]")
         
         # График 1: Активность по месяцам
         monthly_stats = self.df.groupby([self.df['timestamp'].dt.year, self.df['timestamp'].dt.month]).size()
@@ -995,9 +1034,9 @@ class YouTubeAnalyzer:
             )
         ])
         fig1.update_layout(
-            title='Активность по месяцам',
-            xaxis_title='Месяц',
-            yaxis_title='Количество видео',
+            title=get_text(self.language, 'monthly_activity'),
+            xaxis_title=get_text(self.language, 'month'),
+            yaxis_title=get_text(self.language, 'video_count'),
             template='plotly_white'
         )
         
@@ -1025,9 +1064,9 @@ class YouTubeAnalyzer:
                     )
                 ])
                 fig2.update_layout(
-                    title='Накопительное время просмотра',
-                    xaxis_title='Дата',
-                    yaxis_title='Время (секунды)',
+                    title=get_text(self.language, 'cumulative_time'),
+                    xaxis_title=get_text(self.language, 'date'),
+                    yaxis_title=get_text(self.language, 'time_seconds'),
                     template='plotly_white'
                 )
             else:
@@ -1048,9 +1087,9 @@ class YouTubeAnalyzer:
             )
         ])
         fig3.update_layout(
-            title='Активность по дням недели',
-            xaxis_title='День недели',
-            yaxis_title='Количество видео',
+            title=get_text(self.language, 'day_of_week_activity'),
+            xaxis_title=get_text(self.language, 'day_of_week'),
+            yaxis_title=get_text(self.language, 'video_count'),
             template='plotly_white'
         )
         
@@ -1065,9 +1104,9 @@ class YouTubeAnalyzer:
             )
         ])
         fig4.update_layout(
-            title='Активность по часам суток',
-            xaxis_title='Час',
-            yaxis_title='Количество видео',
+            title=get_text(self.language, 'hourly_activity'),
+            xaxis_title=get_text(self.language, 'hour'),
+            yaxis_title=get_text(self.language, 'video_count'),
             template='plotly_white'
         )
         
@@ -1078,23 +1117,23 @@ class YouTubeAnalyzer:
         fig3.write_html(self.output_dir / "day_of_week.html")
         fig4.write_html(self.output_dir / "hourly_activity.html")
         
-        self.console.print("[green]✓ Графики сохранены[/green]")
+        self.console.print(f"[green]✓ {get_text(self.language, 'plots_saved')}[/green]")
     
     def generate_html_report(self, stats: Dict[str, Any]) -> None:
         """Генерация HTML отчета"""
-        self.console.print("[bold blue]Генерирую HTML отчет...[/bold blue]")
+        self.console.print(f"[bold blue]{get_text(self.language, 'generating_html')}[/bold blue]")
         
         # Автоматически создаем графики
-        self.console.print("[blue]Создаю графики...[/blue]")
+        self.console.print(f"[blue]{get_text(self.language, 'creating_plots')}[/blue]")
         self.create_plots()
         
         html_content = f"""
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{self.language}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Анализ истории YouTube</title>
+    <title>YouTube History Analysis</title>
     <style>
         body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1203,21 +1242,21 @@ class YouTubeAnalyzer:
         </div>
         
         <div class="section">
-            <h2>📈 Активность по месяцам</h2>
+            <h2>📈 {get_text(self.language, 'monthly_activity')}</h2>
             <div class="chart-container">
                 <iframe src="monthly_activity.html"></iframe>
             </div>
         </div>
         
         <div class="section">
-            <h2>📅 Активность по дням недели</h2>
+            <h2>📅 {get_text(self.language, 'day_of_week_activity')}</h2>
             <div class="chart-container">
                 <iframe src="day_of_week.html"></iframe>
             </div>
         </div>
         
         <div class="section">
-            <h2>🕐 Активность по часам суток</h2>
+            <h2>🕐 {get_text(self.language, 'hourly_activity')}</h2>
             <div class="chart-container">
                 <iframe src="hourly_activity.html"></iframe>
             </div>
@@ -1270,7 +1309,7 @@ class YouTubeAnalyzer:
             </div>
             
             <div class="section">
-                <h3>📊 Время просмотра</h3>
+                <h3>📊 {get_text(self.language, 'watch_time')}</h3>
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-number">{watch_stats['total_duration_formatted']}</div>
@@ -1294,15 +1333,15 @@ class YouTubeAnalyzer:
         </div>
         
         <div class="section">
-            <h2>📊 Дополнительная статистика</h2>
-            <p><strong>Период анализа:</strong> {stats['date_range']}</p>
-            <p><strong>Источники данных:</strong></p>
+            <h2>📊 {get_text(self.language, 'additional_statistics')}</h2>
+            <p><strong>{get_text(self.language, 'analysis_period')}:</strong> {stats['date_range']}</p>
+            <p><strong>{get_text(self.language, 'data_sources')}:</strong></p>
             <ul>
 """
         
         # Добавляем статистику по источникам
         for source, count in stats['source_stats'].items():
-            html_content += f"                <li>{source}: {count:,} записей</li>\n"
+            html_content += f"                <li>{source}: {count:,} {get_text(self.language, 'records')}</li>\n"
         
         html_content += """
             </ul>
@@ -1319,7 +1358,7 @@ class YouTubeAnalyzer:
         with open(self.output_dir / "report.html", 'w', encoding='utf-8') as f:
             f.write(html_content)
         
-        self.console.print(f"[green]✓ HTML отчет сохранен: {self.output_dir / 'report.html'}[/green]")
+        self.console.print(f"[green]✓ {get_text(self.language, 'html_saved', path=self.output_dir / 'report.html')}[/green]")
     
     def export_to_csv(self) -> None:
         """Экспорт данных в CSV файл"""
@@ -1327,72 +1366,75 @@ class YouTubeAnalyzer:
             self.console.print("[red]Нет данных для экспорта![/red]")
             return
         
-        self.console.print("[bold blue]Экспортирую данные в CSV...[/bold blue]")
+        self.console.print(f"[bold blue]{get_text(self.language, 'exporting_csv')}[/bold blue]")
         
         # Создаем копию DataFrame для экспорта
         export_df = self.df.copy()
+        
+        # Получаем названия колонок для текущего языка
+        csv_columns = get_csv_columns(self.language)
         
         # Добавляем дополнительные колонки для удобства
         export_df['date_formatted'] = export_df['timestamp'].dt.strftime('%Y-%m-%d')
         export_df['time_formatted'] = export_df['timestamp'].dt.strftime('%H:%M:%S')
         export_df['year_month'] = export_df['timestamp'].dt.strftime('%Y-%m')
-        export_df['day_of_week_ru'] = export_df['day_of_week'].map({
-            'Monday': 'Понедельник',
-            'Tuesday': 'Вторник', 
-            'Wednesday': 'Среда',
-            'Thursday': 'Четверг',
-            'Friday': 'Пятница',
-            'Saturday': 'Суббота',
-            'Sunday': 'Воскресенье'
+        export_df['day_of_week_local'] = export_df['day_of_week'].map({
+            'Monday': get_day_of_week(self.language, 0),
+            'Tuesday': get_day_of_week(self.language, 1), 
+            'Wednesday': get_day_of_week(self.language, 2),
+            'Thursday': get_day_of_week(self.language, 3),
+            'Friday': get_day_of_week(self.language, 4),
+            'Saturday': get_day_of_week(self.language, 5),
+            'Sunday': get_day_of_week(self.language, 6)
         })
         
         # Переименовываем колонки для лучшей читаемости
         export_df = export_df.rename(columns={
-            'video_id': 'ID_видео',
-            'title': 'Название_видео',
-            'url': 'Ссылка_на_видео',
-            'channel': 'Канал',
-            'source': 'Источник_данных',
-            'timestamp': 'Дата_время_UTC',
-            'date': 'Дата',
-            'hour': 'Час',
-            'day_of_week': 'День_недели_EN',
-            'month': 'Месяц',
-            'year': 'Год',
-            'date_formatted': 'Дата_формат',
-            'time_formatted': 'Время_формат',
-            'year_month': 'Год_месяц',
-            'day_of_week_ru': 'День_недели_РУ'
+            'video_id': csv_columns['video_id'],
+            'title': csv_columns['title'],
+            'url': csv_columns['url'],
+            'channel': csv_columns['channel'],
+            'source': csv_columns['source'],
+            'timestamp': get_text(self.language, 'datetime_utc'),
+            'date': get_text(self.language, 'date'),
+            'hour': get_text(self.language, 'hour'),
+            'day_of_week': get_text(self.language, 'day_of_week_en'),
+            'month': get_text(self.language, 'month'),
+            'year': get_text(self.language, 'year'),
+            'date_formatted': csv_columns['date'],
+            'time_formatted': csv_columns['time'],
+            'year_month': get_text(self.language, 'year_month'),
+            'day_of_week_local': csv_columns['day_of_week']
         })
         
         # Добавляем информацию о длительности, если есть
         if hasattr(self, 'video_durations') and self.video_durations:
-            export_df['duration_seconds'] = export_df['ID_видео'].map(self.video_durations)
-            export_df['duration_formatted'] = export_df['duration_seconds'].apply(
-                lambda x: self.format_duration(x) if pd.notna(x) else 'Неизвестно'
+            export_df[csv_columns['duration_seconds']] = export_df[csv_columns['video_id']].map(self.video_durations)
+            export_df[csv_columns['duration_formatted']] = export_df[csv_columns['duration_seconds']].apply(
+                lambda x: self.format_duration(x) if pd.notna(x) else get_text(self.language, 'unknown')
             )
-            export_df['duration_minutes'] = export_df['duration_seconds'].apply(
+            export_df[csv_columns['duration_minutes']] = export_df[csv_columns['duration_seconds']].apply(
                 lambda x: round(x / 60, 1) if pd.notna(x) else None
             )
         
         # Выбираем и переупорядочиваем колонки для экспорта
         columns_order = [
-            'ID_видео',
-            'Название_видео', 
-            'Канал',
-            'Ссылка_на_видео',
-            'Дата_формат',
-            'Время_формат',
-            'Год_месяц',
-            'День_недели_РУ',
-            'Час',
-            'Источник_данных',
-            'Дата_время_UTC'
+            csv_columns['video_id'],
+            csv_columns['title'], 
+            csv_columns['channel'],
+            csv_columns['url'],
+            csv_columns['date'],
+            csv_columns['time'],
+            get_text(self.language, 'year_month'),
+            csv_columns['day_of_week'],
+            get_text(self.language, 'hour'),
+            csv_columns['source'],
+            get_text(self.language, 'datetime_utc')
         ]
         
         # Добавляем колонки длительности, если есть
         if hasattr(self, 'video_durations') and self.video_durations:
-            columns_order.extend(['duration_seconds', 'duration_formatted', 'duration_minutes'])
+            columns_order.extend([csv_columns['duration_seconds'], csv_columns['duration_formatted'], csv_columns['duration_minutes']])
         
         # Добавляем колонки, которые могут отсутствовать
         available_columns = [col for col in columns_order if col in export_df.columns]
@@ -1404,16 +1446,16 @@ class YouTubeAnalyzer:
         
         # Создаем сводную статистику
         summary_stats = {
-            'Общая_статистика': {
-                'Всего_записей': len(export_df),
-                'Период_начала': export_df['Дата_формат'].min(),
-                'Период_окончания': export_df['Дата_формат'].max(),
-                'Количество_дней': (export_df['Дата_время_UTC'].max() - export_df['Дата_время_UTC'].min()).days if len(export_df) > 0 else 0
+            get_text(self.language, 'general_statistics'): {
+                get_text(self.language, 'total_records_key'): len(export_df),
+                get_text(self.language, 'period_start'): export_df[csv_columns['date']].min(),
+                get_text(self.language, 'period_end'): export_df[csv_columns['date']].max(),
+                get_text(self.language, 'days_count'): (export_df[get_text(self.language, 'datetime_utc')].max() - export_df[get_text(self.language, 'datetime_utc')].min()).days if len(export_df) > 0 else 0
             },
-            'Статистика_по_источникам': export_df['Источник_данных'].value_counts().to_dict(),
-            'Топ_10_каналов': export_df['Канал'].value_counts().head(10).to_dict(),
-            'Статистика_по_дням_недели': export_df['День_недели_РУ'].value_counts().to_dict(),
-            'Статистика_по_часам': export_df['Час'].value_counts().sort_index().to_dict()
+            get_text(self.language, 'statistics_by_sources'): export_df[csv_columns['source']].value_counts().to_dict(),
+            get_text(self.language, 'top_10_channels'): export_df[csv_columns['channel']].value_counts().head(10).to_dict(),
+            get_text(self.language, 'statistics_by_days'): export_df[csv_columns['day_of_week']].value_counts().to_dict(),
+            get_text(self.language, 'statistics_by_hours'): export_df[get_text(self.language, 'hour')].value_counts().sort_index().to_dict()
         }
         
         # Сохраняем сводную статистику
@@ -1431,17 +1473,17 @@ class YouTubeAnalyzer:
 Основной файл с данными истории просмотров YouTube.
 
 **Колонки:**
-- ID_видео - уникальный идентификатор видео
-- Название_видео - название просмотренного видео
-- Канал - название канала (Unknown = удаленный/приватный канал)
-- Ссылка_на_видео - прямая ссылка на видео
-- Дата_формат - дата в формате YYYY-MM-DD
-- Время_формат - время в формате HH:MM:SS
-- Год_месяц - год и месяц в формате YYYY-MM
-- День_недели_РУ - день недели на русском языке
-- Час - час просмотра (0-23)
-- Источник_данных - откуда получены данные (watch_history/my_activity)
-- Дата_время_UTC - полная дата и время в UTC
+- {csv_columns['video_id']} - уникальный идентификатор видео
+- {csv_columns['title']} - название просмотренного видео
+- {csv_columns['channel']} - название канала (Unknown = удаленный/приватный канал)
+- {csv_columns['url']} - прямая ссылка на видео
+- {csv_columns['date']} - дата в формате YYYY-MM-DD
+- {csv_columns['time']} - время в формате HH:MM:SS
+- {get_text(self.language, 'year_month')} - год и месяц в формате YYYY-MM
+- {csv_columns['day_of_week']} - день недели на {get_text(self.language, 'language_ru' if self.language == 'ru' else 'language_en')}
+- {get_text(self.language, 'hour')} - час просмотра (0-23)
+- {csv_columns['source']} - откуда получены данные (watch_history/my_activity)
+- {get_text(self.language, 'datetime_utc')} - полная дата и время в UTC
 
 ### 2. youtube_history_summary.json
 Сводная статистика по всем данным.
@@ -1450,8 +1492,8 @@ class YouTubeAnalyzer:
 HTML отчет с графиками и визуализацией.
 
 ## Общая информация:
-- Всего записей: {len(export_df)}
-- Период: {export_df['Дата_формат'].min()} - {export_df['Дата_формат'].max()}
+- {get_text(self.language, 'total_records')}: {len(export_df)}
+- {get_text(self.language, 'period')}: {export_df[csv_columns['date']].min()} - {export_df[csv_columns['date']].max()}
 - YouTube Music: полностью исключен
 - My Activity: только "Watched" записи (без лайков, дизлайков, поиска)
 - Дубли: удалены автоматически
@@ -1466,17 +1508,17 @@ HTML отчет с графиками и визуализацией.
         with open(readme_path, 'w', encoding='utf-8') as f:
             f.write(readme_content)
         
-        self.console.print(f"[green]✓ CSV экспорт сохранен: {csv_path}[/green]")
-        self.console.print(f"[green]✓ Сводная статистика: {summary_path}[/green]")
-        self.console.print(f"[green]✓ README файл: {readme_path}[/green]")
-        self.console.print(f"[blue]Размер CSV файла: {csv_path.stat().st_size / 1024 / 1024:.1f} MB[/blue]")
+        self.console.print(f"[green]✓ {get_text(self.language, 'csv_saved', path=csv_path)}[/green]")
+        self.console.print(f"[green]✓ {get_text(self.language, 'summary_statistics')}: {summary_path}[/green]")
+        self.console.print(f"[green]✓ {get_text(self.language, 'readme_file')}: {readme_path}[/green]")
+        self.console.print(f"[blue]{get_text(self.language, 'csv_file_size')}: {csv_path.stat().st_size / 1024 / 1024:.1f} MB[/blue]")
         
         # Показываем краткую статистику
-        self.console.print(f"\n[bold yellow]Краткая статистика экспорта:[/bold yellow]")
-        self.console.print(f"📊 Всего записей: {len(export_df):,}")
-        self.console.print(f"📅 Период: {export_df['Дата_формат'].min()} - {export_df['Дата_формат'].max()}")
-        self.console.print(f"🎯 Уникальных каналов: {export_df['Канал'].nunique()}")
-        self.console.print(f"📁 Файл готов для импорта в Excel/Google Sheets")
+        self.console.print(f"\n[bold yellow]{get_text(self.language, 'export_summary')}:[/bold yellow]")
+        self.console.print(f"📊 {get_text(self.language, 'total_records')}: {len(export_df):,}")
+        self.console.print(f"📅 {get_text(self.language, 'period')}: {export_df[csv_columns['date']].min()} - {export_df[csv_columns['date']].max()}")
+        self.console.print(f"🎯 {get_text(self.language, 'unique_channels')}: {export_df[csv_columns['channel']].nunique()}")
+        self.console.print(f"📁 {get_text(self.language, 'file_ready_for_import')}")
     
     def generate_statistics(self) -> Dict[str, Any]:
         """Генерация статистики"""
@@ -1520,8 +1562,8 @@ HTML отчет с графиками и визуализацией.
             
             # Заголовок
             self.console.print("╭───────────────────────────────────────╮")
-            self.console.print("│ YouTube History Analyzer              │")
-            self.console.print("│ Анализатор истории просмотров YouTube │")
+            self.console.print(f"│ {get_text(self.language, 'app_title')}              │")
+            self.console.print(f"│ {get_text(self.language, 'app_subtitle')} │")
             self.console.print("╰───────────────────────────────────────╯")
             
             # Показываем статистику, если есть данные
@@ -1529,22 +1571,22 @@ HTML отчет с графиками и визуализацией.
                 stats = self.generate_statistics()
                 
                 # Основная статистика
-                self.console.print("\n      📊 Основная статистика       ")
+                self.console.print(f"\n      📊 {get_text(self.language, 'main_statistics')}       ")
                 table = Table(show_header=False, box=None)
-                table.add_column("Параметр", style="cyan")
-                table.add_column("Значение", style="green")
+                table.add_column(get_text(self.language, 'parameter'), style="cyan")
+                table.add_column(get_text(self.language, 'value'), style="green")
                 
-                table.add_row("Всего видео", f"{stats['total_videos']:,}")
-                table.add_row("Дней активности", f"{stats['total_days']:,}")
-                table.add_row("Среднее видео в день", f"{stats['avg_videos_per_day']:.1f}")
+                table.add_row(get_text(self.language, 'total_videos_label'), f"{stats['total_videos']:,}")
+                table.add_row(get_text(self.language, 'active_days_label'), f"{stats['total_videos']:,}")
+                table.add_row(get_text(self.language, 'avg_videos_per_day_label'), f"{stats['avg_videos_per_day']:.1f}")
                 
                 self.console.print(table)
                 
                 # Топ каналов
-                self.console.print("\n      🏆 Топ каналов      ")
+                self.console.print(f"\n      🏆 {get_text(self.language, 'top_channels')}      ")
                 table = Table(show_header=False, box=None)
-                table.add_column("Канал", style="cyan")
-                table.add_column("Видео", style="green")
+                table.add_column(get_text(self.language, 'channel'), style="cyan")
+                table.add_column(get_text(self.language, 'video'), style="green")
                 
                 for channel, count in stats['top_channels'][:5]:
                     table.add_row(channel, str(count))
@@ -1552,55 +1594,55 @@ HTML отчет с графиками и визуализацией.
                 self.console.print(table)
             
             # Меню действий
-            self.console.print("\n[bold yellow]Доступные действия:[/bold yellow]")
-            self.console.print("1. Загрузить данные из Takeout")
-            self.console.print("2. Получить длительность видео")
-            self.console.print("3. Сгенерировать HTML отчет")
-            self.console.print("4. Экспорт данных в CSV")
-            self.console.print("5. Открыть отчет в браузере")
-            self.console.print("0. Выход")
+            self.console.print(f"\n[bold yellow]{get_text(self.language, 'main_menu_title')}[/bold yellow]")
+            self.console.print(get_text(self.language, 'menu_option_1'))
+            self.console.print(get_text(self.language, 'menu_option_2'))
+            self.console.print(get_text(self.language, 'menu_option_3'))
+            self.console.print(get_text(self.language, 'menu_option_4'))
+            self.console.print(get_text(self.language, 'menu_option_5'))
+            self.console.print(get_text(self.language, 'menu_option_0'))
             
-            choice = input("\nВыберите действие (0-5): ").strip()
+            choice = input(f"\n{get_text(self.language, 'enter_choice')}").strip()
             
             if choice == "0":
-                self.console.print("[yellow]До свидания![/yellow]")
+                self.console.print(f"[yellow]{get_text(self.language, 'goodbye')}[/yellow]")
                 break
             elif choice == "1":
                 self.load_takeout_data_menu()
             elif choice == "2":
                 if self.df is not None:
-                    sample_size = input("Размер выборки для анализа длительности (по умолчанию 100): ").strip()
+                    sample_size = input(get_text(self.language, 'sample_size_prompt')).strip()
                     sample_size = int(sample_size) if sample_size.isdigit() else 100
                     self.get_durations(sample_size)
                 else:
-                    self.console.print("[red]Сначала загрузите данные![/red]")
+                    self.console.print(f"[red]{get_text(self.language, 'no_data_loaded')}[/red]")
             elif choice == "3":
                 if self.df is not None:
                     stats = self.generate_statistics()
                     self.generate_html_report(stats)
                 else:
-                    self.console.print("[red]Сначала загрузите данные![/red]")
+                    self.console.print(f"[red]{get_text(self.language, 'no_data_loaded')}[/red]")
             elif choice == "4":
                 if self.df is not None:
                     self.export_to_csv()
                 else:
-                    self.console.print("[red]Сначала загрузите данные![/red]")
+                    self.console.print(f"[red]{get_text(self.language, 'no_data_loaded')}[/red]")
             elif choice == "5":
                 report_path = self.output_dir / "report.html"
                 if report_path.exists():
                     import webbrowser
                     webbrowser.open(f"file://{report_path.absolute()}")
                 else:
-                    self.console.print("[red]Отчет еще не создан![/red]")
+                    self.console.print(f"[red]{get_text(self.language, 'report_not_created')}[/red]")
             else:
-                self.console.print("[red]Неверный выбор![/red]")
+                self.console.print(f"[red]{get_text(self.language, 'invalid_choice')}[/red]")
             
-            input("\nНажмите Enter для продолжения...")
+            input(f"\n{get_text(self.language, 'press_enter')}")
             self.console.clear()
     
     def load_takeout_data_menu(self) -> None:
         """Меню загрузки данных из Takeout"""
-        self.console.print("\n[bold blue]Загрузка данных из Takeout[/bold blue]")
+        self.console.print(f"\n[bold blue]{get_text(self.language, 'loading_data')}[/bold blue]")
         
         # Автоматический поиск файлов
         history_file = Path("Takeout/YouTube and YouTube Music/history/watch-history.json")
@@ -1609,32 +1651,35 @@ HTML отчет с графиками и визуализацией.
         loaded_any = False
         
         if history_file.exists():
-            self.console.print(f"[green]Найден файл истории: {history_file}[/green]")
-            if Confirm.ask("Загрузить файл истории просмотров?"):
+            self.console.print(f"[green]{get_text(self.language, 'found_history_file', path=history_file)}[/green]")
+            if Confirm.ask(get_text(self.language, 'load_watch_history')):
                 if self.load_data_source(str(history_file), 'watch_history'):
                     loaded_any = True
         
         if activity_file.exists():
-            self.console.print(f"[green]Найден файл My Activity: {activity_file}[/green]")
-            if Confirm.ask("Загрузить файл My Activity?"):
+            self.console.print(f"[green]{get_text(self.language, 'found_my_activity', path=activity_file)}[/green]")
+            if Confirm.ask(get_text(self.language, 'load_watch_history')):
                 if self.load_data_source(str(activity_file), 'my_activity'):
                     loaded_any = True
         
         if loaded_any:
             self.process_data()
         else:
-            self.console.print("[red]Не удалось загрузить ни один файл![/red]")
+            self.console.print(f"[red]{get_text(self.language, 'no_files_loaded')}[/red]")
 
 def main():
     """Главная функция"""
     analyzer = YouTubeAnalyzer()
     
     try:
+        # Сначала выбираем язык
+        analyzer.select_language()
+        # Затем показываем TUI
         analyzer.show_tui()
     except KeyboardInterrupt:
-        analyzer.console.print("\n[yellow]Программа прервана пользователем[/yellow]")
+        analyzer.console.print(f"\n[yellow]{get_text(analyzer.language, 'program_interrupted')}[/yellow]")
     except Exception as e:
-        analyzer.console.print(f"\n[red]Ошибка: {e}[/red]")
+        analyzer.console.print(f"\n[red]{get_text(analyzer.language, 'error')}: {e}[/red]")
 
 if __name__ == "__main__":
     main()
