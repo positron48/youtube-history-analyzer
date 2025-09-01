@@ -428,6 +428,7 @@ class YouTubeAnalyzer:
                 return
             
             self.console.print("[green]✓ Используется YouTube Data API v3[/green]")
+            self.console.print(f"[blue]📋 Всего видео для обработки: {len(sample_df)}[/blue]")
             
             processed = 0
             total = len(sample_df)
@@ -470,7 +471,24 @@ class YouTubeAnalyzer:
                                         self.video_durations[video_id] = duration_seconds
                                         minutes = duration_seconds // 60
                                         seconds = duration_seconds % 60
-                                        progress.update(task, description=f"✓ {row['title'][:30]}... ({minutes}:{seconds:02d})")
+                                        
+                                        # Вычисляем текущее среднее значение
+                                        current_avg = sum(self.video_durations.values()) / len(self.video_durations)
+                                        avg_minutes = int(current_avg // 60)
+                                        avg_seconds = int(current_avg % 60)
+                                        
+                                        progress.update(task, description=f"✓ {row['title'][:30]}... ({minutes}:{seconds:02d}) | Среднее: {avg_minutes}:{avg_seconds:02d}")
+                                        
+                                        # Показываем изменение среднего значения каждые 5 видео
+                                        if len(self.video_durations) % 5 == 0:
+                                            self.console.print(f"[blue]📊 Текущее среднее: {avg_minutes}:{avg_seconds:02d} (на основе {len(self.video_durations)} видео)[/blue]")
+                                        
+                                        # Показываем общее количество каждые 10 видео
+                                        if len(self.video_durations) % 10 == 0:
+                                            total_processed = len(self.video_durations)
+                                            total_remaining = total - total_processed
+                                            progress_percent = (total_processed / total) * 100
+                                            self.console.print(f"[green]✅ Обработано: {total_processed}/{total} видео ({progress_percent:.1f}%) | Осталось: {total_remaining}[/green]")
                                     else:
                                         progress.update(task, description=f"❌ {row['title'][:30]}... (ошибка парсинга)")
                                 else:
@@ -906,18 +924,18 @@ class YouTubeAnalyzer:
     def format_duration(self, seconds: int) -> str:
         """Форматирует длительность в секундах в читаемый вид"""
         if seconds < 60:
-            return f"{seconds} секунд"
+            return f"{int(seconds)} секунд"
         elif seconds < 3600:
-            minutes = seconds // 60
-            remaining_seconds = seconds % 60
+            minutes = int(seconds // 60)
+            remaining_seconds = int(seconds % 60)
             if remaining_seconds == 0:
                 return f"{minutes} минут"
             else:
                 return f"{minutes} минут {remaining_seconds} секунд"
         else:
-            hours = seconds // 3600
-            remaining_minutes = (seconds % 3600) // 60
-            remaining_seconds = seconds % 60
+            hours = int(seconds // 3600)
+            remaining_minutes = int((seconds % 3600) // 60)
+            remaining_seconds = int(seconds % 60)
             if remaining_minutes == 0 and remaining_seconds == 0:
                 return f"{hours} часов"
             elif remaining_seconds == 0:
@@ -1264,30 +1282,6 @@ class YouTubeAnalyzer:
                     </div>
                 </div>
                 
-                <div class="section">
-                    <h3>🏆 Топ-10 самых длинных видео</h3>
-                    <div class="top-channels">
-"""
-            
-            # Добавляем топ-10 самых длинных видео
-            sorted_durations = sorted(self.video_durations.items(), key=lambda x: x[1], reverse=True)
-            for i, (video_id, duration) in enumerate(sorted_durations[:10], 1):
-                video_row = self.df[self.df['video_id'] == video_id]
-                if not video_row.empty:
-                    title = video_row.iloc[0]['title'][:50] + "..." if len(video_row.iloc[0]['title']) > 50 else video_row.iloc[0]['title']
-                    channel = video_row.iloc[0]['channel']
-                    duration_formatted = self.format_duration(duration)
-                    
-                    html_content += f"""
-                        <div class="channel-card">
-                            <div class="channel-name">{title}</div>
-                            <div class="channel-count">{duration_formatted}</div>
-                            <div style="font-size: 0.9em; color: #666; margin-top: 5px;">{channel}</div>
-                        </div>
-"""
-            
-            html_content += """
-                    </div>
                 </div>
             </div>
 """
