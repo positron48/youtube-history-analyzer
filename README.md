@@ -1,115 +1,117 @@
 # YouTube History Analyzer 🎬
 
-**Анализатор истории просмотров YouTube с TUI интерфейсом**
+**YouTube viewing history analyzer with TUI interface**
 
-Полнофункциональный инструмент для анализа вашей истории просмотров YouTube с возможностью экспорта данных, получения длительности видео и создания интерактивных отчетов.
+Full-featured tool for analyzing your YouTube viewing history with data export capabilities, video duration retrieval, and interactive report generation.
 
-> 📸 **Скриншоты интерфейса и инструкций** находятся в папке [`images/`](images/) для наглядного понимания процесса работы.
+> 📸 **Interface screenshots and instructions** are located in the [`images/`](images/) folder for visual understanding of the workflow.
 
-## Основные возможности
+> 🌍 **Language versions**: [🇷🇺 Русский](README_ru.md) | [🇺🇸 English](README.md)
 
-### **Умная загрузка данных**
-- **Автоматическое обнаружение** файлов Takeout
-- **Объединение двух источников**:
-  - `watch-history.json` - история просмотров
-  - `MyActivity.json` - активность YouTube
-- **Автоматическая дедупликация** записей
-- **Фильтрация YouTube Music** (полностью исключен)
+## Key Features
 
-### **Получение длительности видео**
-- **YouTube Data API v3** для надежного получения метаданных
-- **Автоматическое округление** времени до целых секунд
-- **Прогресс-индикаторы** с текущей статистикой
-- **Кэширование результатов** в CSV файл
+### **Smart Data Loading**
+- **Automatic detection** of Takeout files
+- **Combining two sources**:
+  - `watch-history.json` - viewing history
+  - `MyActivity.json` - YouTube activity
+- **Automatic deduplication** of records
+- **YouTube Music filtering** (completely excluded)
 
-### **Анализ и статистика**
-- **Активность по времени**: часы, дни недели, месяцы
-- **Топ каналы**
-- **Время просмотра** с оценкой общего времени
+### **Video Duration Retrieval**
+- **YouTube Data API v3** for reliable metadata retrieval
+- **Automatic time rounding** to whole seconds
+- **Progress indicators** with current statistics
+- **Result caching** in CSV file
 
-### **Экспорт данных**
-- **CSV файл** для Excel/Google Sheets
-- **Сводная статистика** в JSON
+### **Analysis and Statistics**
+- **Time-based activity**: hours, days of week, months
+- **Top channels**
+- **Watch time** with total time estimation
 
-### **🌍 Многоязычность**
-- **Русский и английский** языки
+### **Data Export**
+- **CSV file** for Excel/Google Sheets
+- **Summary statistics** in JSON
 
-## Установка и запуск
+### **🌍 Multilingual Support**
+- **Russian and English** languages
 
-### Требования
-- **Python 3.8+** (включая старые версии)
-- **Распакованные архивы** Google Takeout
-- **YouTube Data API ключ** (для получения длительности)
-- **Файлы локализации** (включены в проект)
+## Installation and Setup
 
-### Установка зависимостей
+### Requirements
+- **Python 3.8+** (including older versions)
+- **Extracted Google Takeout archives**
+- **YouTube Data API key** (for duration retrieval)
+- **Localization files** (included in project)
+
+### Installing Dependencies
 ```bash
 pip3 install -r requirements.txt
 ```
 
-### Настройка YouTube Data API
-1. Создайте проект в [Google Cloud Console](https://console.cloud.google.com/)
-2. Включите YouTube Data API v3
-3. Создайте API ключ
-4. Сохраните ключ в файл `youtube_api_key.txt` в корне проекта
+### YouTube Data API Setup
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable YouTube Data API v3
+3. Create an API key
+4. Save the key to `youtube_api_key.txt` file in project root
 
-Детальные инструкции описаны в [API_INSTRUCTIONS.md](API_INSTRUCTIONS.md)
+Detailed instructions are described in [API_INSTRUCTIONS.md](API_INSTRUCTIONS.md)
 
-#### **Ограничения API:**
-- **Квота**: 10,000 единиц в день
-- **Запрос**: 1 единица на видео
-- **Рекомендация**: начинайте с выборки 100-1000 видео
+#### **API Limitations:**
+- **Quota**: 10,000 units per day
+- **Request**: 1 unit per video
+- **Recommendation**: start with 100-1000 video sample
 
-### Получение данных из Google Takeout
+### Getting Data from Google Takeout
 
-Для работы с анализатором необходимо выгрузить вашу историю просмотров YouTube из Google Takeout.
+To work with the analyzer, you need to export your YouTube viewing history from Google Takeout.
 
-#### **Шаг 1: Переход в Google Takeout**
-1. Откройте [Google Takeout](https://takeout.google.com/)
-2. Войдите в аккаунт Google, если не авторизованы
+#### **Step 1: Access Google Takeout**
+1. Open [Google Takeout](https://takeout.google.com/)
+2. Sign in to your Google account if not authorized
 
-#### **Шаг 2: Настройка выгрузки YouTube**
-1. **Снимите галочки** со всех сервисов (кнопка "Отменить выбор")
-2. **Поставьте галочку** только на "YouTube и YouTube Music"
-3. **Нажмите "Далее"**
+#### **Step 2: Configure YouTube Export**
+1. **Uncheck all services** (button "Deselect all")
+2. **Check only** "YouTube and YouTube Music"
+3. **Click "Next"**
 
-![Настройка YouTube в Takeout](images/settings-yt.png)
+![YouTube Setup in Takeout](images/settings-yt.png)
 
-#### **Шаг 3: Настройка формата данных**
-1. **Формат файла**: выберите "JSON"
-2. **Размер архива**: оставьте "2 ГБ" (по умолчанию)
-3. **Нажмите "Создать экспорт"**
+#### **Step 3: Configure Data Format**
+1. **File format**: select "JSON"
+2. **Archive size**: leave "2 GB" (default)
+3. **Click "Create export"**
 
-![Настройка формата JSON](images/settings-json.png)
+![JSON Format Setup](images/settings-json.png)
 
-#### **Шаг 4: Выгрузка истории просмотров**
-1. **Дождитесь** завершения экспорта
-2. **Скачайте** архив `takeout-YYYYMMDDTHHMMSSZ-001.zip`
-3. **Распакуйте** в папку `Takeout/` в корне проекта
+#### **Step 4: Export Viewing History**
+1. **Wait for** export completion
+2. **Download** archive `takeout-YYYYMMDDTHHMMSSZ-001.zip`
+3. **Extract** to `Takeout/` folder in project root
 
-![Выгрузка истории просмотров](images/settings-history.png)
+![Viewing History Export](images/settings-history.png)
 
-#### **Шаг 5: Выгрузка My Activity (опционально)**
-Для получения данных до 2021 года дополнительно выгрузите My Activity:
+#### **Step 5: Export My Activity (Optional)**
+To get data before 2021, additionally export My Activity:
 
-1. **Вернитесь** в Google Takeout
-2. **Поставьте галочку** на "Мои действия"
-3. **Нажмите "Далее"**
+1. **Return** to Google Takeout
+2. **Check** "My Activity"
+3. **Click "Next"**
 
-![Настройка My Activity](images/settings-my-activity.png)
+![My Activity Setup](images/settings-my-activity.png)
 
-4. **Выберите только YouTube** из списка сервисов
-5. **Формат**: JSON
-6. **Создайте экспорт** и скачайте второй архив
+4. **Select only YouTube** from service list
+5. **Format**: JSON
+6. **Create export** and download second archive
 
-![Выбор YouTube в My Activity](images/settings-my-activity-yt.png)
+![YouTube Selection in My Activity](images/settings-my-activity-yt.png)
 
-7. **Распакуйте** второй архив в ту же папку `Takeout/`
+7. **Extract** second archive to same `Takeout/` folder
 
-![Формат My Activity JSON](images/settings-my-activity-json.png)
+![My Activity JSON Format](images/settings-my-activity-json.png)
 
-#### **Результат выгрузки**
-После распаковки у вас должна быть структура:
+#### **Export Result**
+After extraction, you should have structure:
 ```
 Takeout/
 ├── YouTube and YouTube Music/
@@ -120,235 +122,205 @@ Takeout/
         └── MyActivity.json
 ```
 
-### Запуск
+### Launch
 ```bash
 python3 youtube_analyzer.py
 ```
 
-## Упрощенный TUI интерфейс
+## Streamlined TUI Interface
 
-Анализатор предоставляет удобный текстовый интерфейс с автоматизацией основных операций:
+The analyzer provides a convenient text interface with automation of main operations:
 
 ```
 ╭───────────────────────────────────────╮
 │ YouTube History Analyzer              │
-│ Анализатор истории просмотров YouTube │
+│ YouTube Viewing History Analyzer      │
 ╰───────────────────────────────────────╯
 
-📊 Основная статистика
+📊 Main Statistics
 ┌─────────────┬─────────┐
-│ Параметр    │ Значение│
+│ Parameter   │ Value   │
 ├─────────────┼─────────┤
-│ Всего видео │ 1,234  │
-│ Дней активности│ 456   │
-│ Среднее видео│ 2.7    │
-│ в день      │         │
+│ Total Videos│ 1,234  │
+│ Active Days │ 456     │
+│ Average     │ 2.7     │
+│ Videos/Day  │         │
 └─────────────┴─────────┘
 
-🏆 Топ каналов
+🏆 Top Channels
 ┌─────────────┬──────┐
-│ Канал       │ Видео│
+│ Channel     │ Videos│
 ├─────────────┼──────┤
 │ Channel 1   │ 123  │
 │ Channel 2   │ 89   │
 │ Channel 3   │ 67   │
 └─────────────┴──────┘
 
-📊 Главное меню
-1. Загрузить данные из Takeout
-2. Получить длительность видео
-3. Сгенерировать HTML отчет
-4. Экспорт данных в CSV
-5. Открыть отчет в браузере
-0. Выход
+📊 Main Menu
+1. Load data from Takeout
+2. Get video duration
+3. Generate HTML report
+4. Export data to CSV
+5. Open report in browser
+0. Exit
 ```
 
-### **Пункт 1: Загрузить данные из Takeout**
-- **Автоматически находит** и загружает оба источника
-- **Объединяет данные** без дублей
-- **Применяет фильтрацию** YouTube Music
-- **Показывает статистику** объединения в реальном времени
+### **Option 1: Load Data from Takeout**
+- **Automatically finds** and loads both sources
+- **Combines data** without duplicates
+- **Applies YouTube Music filtering**
+- **Shows statistics** of combination in real time
 
-### **Пункт 2: Получить длительность видео**
-- **YouTube Data API v3** для надежности
-- **Настраиваемый размер выборки** (по умолчанию 100)
-- **Прогресс-индикаторы** с текущей статистикой:
-  - 📊 Текущее среднее время
-  - 🎯 Количество обработанных видео
-  - 📈 Процент выполнения
-- **Автоматическое сохранение** в CSV
+### **Option 2: Get Video Duration**
+- **YouTube Data API v3** for reliability
+- **Configurable sample size** (default 100)
+- **Progress indicators** with current statistics:
+  - 📊 Current average time
+  - 🎯 Number of processed videos
+  - 📈 Completion percentage
+- **Automatic saving** to CSV
 
-### **Пункт 3: Сгенерировать HTML отчет**
-- **Автоматически создает графики** при генерации
-- **Встроенная статистика** и топ каналы
-- **Статистика по длительности** (если доступна)
-- **Общее время просмотра** с оценками
-- **Интерактивные графики** Plotly
+### **Option 3: Generate HTML Report**
+- **Automatically creates graphs** during generation
+- **Built-in statistics** and top channels
+- **Duration statistics** (if available)
+- **Total watch time** with estimates
+- **Interactive Plotly graphs**
 
-### **Пункт 4: Экспорт данных в CSV**
-- **Данные в удобном формате** для Excel/Google Sheets
-- **Дополнительные поля** для анализа
-- **Длительность видео** в секундах и читаемом формате
-- **Автоматическое создание** README с описанием колонок
+### **Option 4: Export Data to CSV**
+- **Data in convenient format** for Excel/Google Sheets
+- **Additional fields** for analysis
+- **Video duration** in seconds and readable format
+- **Automatic creation** of README with column descriptions
 
-### **Пункт 5: Открыть отчет в браузере**
-- **Просмотр HTML отчета** с графиками
-- **Автоматическое открытие** в браузере по умолчанию
+### **Option 5: Open Report in Browser**
+- **View HTML report** with graphs
+- **Automatic opening** in default browser
 
-## Структура данных
+## Data Structure
 
-### **Основные поля CSV:**
-- `ID_видео` - уникальный идентификатор
-- `Название_видео` - название просмотренного видео
-- `Канал` - название канала
-- `Ссылка_на_видео` - прямая ссылка
-- `Дата_формат` - дата YYYY-MM-DD
-- `Время_формат` - время HH:MM:SS
-- `День_недели_РУ` - день недели на русском
-- `Источник_данных` - откуда получены данные
+### **Main CSV Fields:**
+- **video_id**: unique video identifier
+- **title**: video title
+- **channel**: channel name
+- **url**: video link
+- **date**: viewing date
+- **time**: viewing time
+- **day_of_week**: day of week
+- **source**: data source
+- **duration_seconds**: video duration in seconds
+- **duration_formatted**: human-readable duration
 
-### **Дополнительные поля (при наличии длительности):**
-- `Длительность_секунды` - длительность в секундах
-- `Длительность_формат` - читаемый формат (например, "25 минут 12 секунд")
-- `Длительность_минуты` - длительность в минутах
+## Generated Reports
 
-### **Фильтрация данных:**
-- ✅ **YouTube видео** - включены
-- ❌ **YouTube Music** - полностью исключен
-- ❌ **Лайки/дизлайки** - исключены из My Activity
-- ❌ **Поиск/просмотры постов** - исключены
-- ✅ **Только "Watched"** записи из My Activity
+### **📊 HTML Report with Graphs**
+- **Monthly activity** trends
+- **Cumulative watch time** over time
+- **Day of week activity** patterns
+- **Hourly activity** distribution
+- **Top channels** with statistics
+- **Duration statistics** (if available)
 
-## Статистика по длительности
+### **📈 Interactive Charts**
+- **Plotly-based** interactive graphs
+- **Zoom and pan** capabilities
+- **Hover information** with details
+- **Export to PNG** functionality
 
-### **Расчет общего времени**
-- **Известные видео**: точное время на основе API
-- **Неизвестные видео**: оценка на основе средней длительности
-- **Покрытие данных**: процент видео с известной длительностью
+### **🏆 Statistics Dashboard**
+- **Main metrics** in visual cards
+- **Channel rankings** with counts
+- **Time analysis** with estimates
+- **Data coverage** information
 
+### **📋 Additional Information**
+- **Analysis period** with dates
+- **Data sources** with record counts
+- **Filtering** and deduplication
 
-## Примеры графиков и отчетов
+## Technical Details
 
-Анализатор создает интерактивные HTML отчеты с использованием Plotly:
+### **Data Processing:**
+- **Deduplication**: by `video_id` + `timestamp`
+- **Filtering**: by `header` and `titleUrl`
+- **Validation**: required field checking
 
-### **📊 Основная статистика**
-- **Общая информация**: количество видео, дней активности, среднее в день
-- **Топ каналы**: рейтинг по количеству просмотров
-- **Источники данных**: статистика по объединенным файлам
+### **Duration Retrieval:**
+- **YouTube Data API v3** for reliability
+- **ISO 8601 parsing** of duration (PT3M7S → 187 seconds)
+- **API error handling** (400, 403, timeouts)
+- **Result caching** in CSV
 
-### **📈 Активность по месяцам**
-- **Линейный график** с маркерами
-- **Показывает тренды** просмотров по времени
-- **Интерактивные подсказки** при наведении
+### **Compatibility:**
+- **Python 3.8+** (including older versions)
+- **Cross-platform** (Linux, Windows, macOS)
+- **Auto-detection** of file encodings
 
-### **📅 Активность по дням недели**
-- **Столбчатая диаграмма** по дням недели
-- **Выявляет пиковые дни** активности
-- **Локализованные названия** дней недели
-
-### **🕐 Активность по часам**
-- **Распределение просмотров** в течение дня
-- **Показывает привычки** пользователя
-- **24-часовой формат** с группировкой
-
-### **🏆 Топ каналы**
-- **Рейтинг каналов** по количеству просмотров
-- **Интерактивные карточки** с деталями
-- **Ссылки на каналы** для перехода
-
-### **⏰ Статистика по длительности**
-- **Общее время просмотра** с оценками
-- **Средняя длительность** видео
-- **Покрытие данных** по длительности
-
-### **📋 Дополнительная информация**
-- **Период анализа** с датами
-- **Источники данных** с количеством записей
-- **Фильтрация** и дедупликация
-
-## Технические детали
-
-### **Обработка данных:**
-- **Дедупликация**: по `video_id` + `timestamp`
-- **Фильтрация**: по `header` и `titleUrl`
-- **Валидация**: проверка обязательных полей
-
-### **Получение длительности:**
-- **YouTube Data API v3** для надежности
-- **ISO 8601 парсинг** длительности (PT3M7S → 187 секунд)
-- **Обработка ошибок** API (400, 403, таймауты)
-- **Кэширование** результатов в CSV
-
-### **Совместимость:**
-- **Python 3.8+** (включая старые версии)
-- **Кроссплатформенность** (Linux, Windows, macOS)
-- **Автоопределение** кодировок файлов
-
-## Структура проекта
+## Project Structure
 
 ```
 youtube-history-analytics/
-├── youtube_analyzer.py          # Основной скрипт
-├── requirements.txt             # Зависимости Python
-├── README.md                   # Документация
-├── locales.py                  # Файлы локализации
-├── youtube_api_key.txt         # YouTube Data API ключ
-├── images/                     # Скриншоты и изображения
-├── Takeout/                    # Распакованные архивы
+├── youtube_analyzer.py          # Main script
+├── requirements.txt             # Python dependencies
+├── README.md                   # Documentation
+├── locales.py                  # Localization files
+├── youtube_api_key.txt         # YouTube Data API key
+├── images/                     # Screenshots and images
+├── Takeout/                    # Extracted archives
 │   ├── YouTube and YouTube Music/
 │   └── My Activity/
-└── youtube_analysis_output/    # Результаты анализа
-    ├── report.html             # HTML отчет
-    ├── youtube_history_export.csv  # CSV экспорт
-    ├── youtube_history_summary.json # Статистика
-    ├── video_durations.csv     # Длительности видео
-    └── README_export.md        # Описание экспорта
+└── youtube_analysis_output/    # Analysis results
+    ├── report.html             # HTML report
+    ├── youtube_history_export.csv  # CSV export
+    ├── youtube_history_summary.json # Statistics
+    ├── video_durations.csv     # Video durations
+    └── README_export.md        # Export description
 ```
 
-## Примеры использования
+## Usage Examples
 
-### **🚀 Быстрый старт**
+### **🚀 Quick Start**
 ```bash
-# 1. Установка зависимостей
+# 1. Install dependencies
 pip3 install -r requirements.txt
 
-# 2. Настройка API ключа
+# 2. Setup API key
 echo "YOUR_API_KEY_HERE" > youtube_api_key.txt
 
-# 3. Запуск анализатора
+# 3. Launch analyzer
 python3 youtube_analyzer.py
 
-# 4. Выбор языка (русский/английский)
-# 5. Загрузка данных из Takeout
-# 6. Получение длительности видео
-# 7. Генерация HTML отчета
+# 4. Select language (Russian/English)
+# 5. Load data from Takeout
+# 6. Get video duration
+# 7. Generate HTML report
 ```
 
-### **📊 Типичный процесс анализа**
-1. **Загрузка данных** → автоматическое объединение двух источников
-2. **Получение длительности** → выборка 100-1000 видео для начала
-3. **Генерация отчета** → создание интерактивных графиков
-4. **Экспорт CSV** → данные для Excel/Google Sheets
-5. **Просмотр результатов** → анализ привычек просмотра
+### **📊 Typical Analysis Process**
+1. **Load data** → automatic combination of two sources
+2. **Get duration** → sample 100-1000 videos to start
+3. **Generate report** → create interactive graphs
+4. **Export CSV** → data for Excel/Google Sheets
+5. **View results** → analyze viewing habits
 
-### **🎯 Анализ результатов**
-- **Пиковые часы**: когда вы чаще всего смотрите YouTube
-- **Любимые дни**: в какие дни недели активность выше
-- **Тренды**: как меняется активность по месяцам
-- **Топ каналы**: ваши любимые создатели контента
-- **Время просмотра**: общее время, потраченное на YouTube
+### **🎯 Result Analysis**
+- **Peak hours**: when you most often watch YouTube
+- **Favorite days**: which days of week have higher activity
+- **Trends**: how activity changes by months
+- **Top channels**: your favorite content creators
+- **Watch time**: total time spent on YouTube
 
-## Результат
+## Results
 
-После анализа у вас будет:
+After analysis, you will have:
 
-1. **HTML отчет** с интерактивными графиками
-2. **CSV файл** для дальнейшего анализа
-3. **Статистика** просмотров
-4. **Очищенные данные** без дублей и музыки
-5. **Длительность видео** для точного расчета времени
-6. **Понимание** ваших привычек просмотра
+1. **HTML report** with interactive graphs
+2. **CSV file** for further analysis
+3. **Viewing statistics**
+4. **Clean data** without duplicates and music
+5. **Video duration** for accurate time calculation
+6. **Understanding** of your viewing habits
 
 ---
 
-**🎬 Анализируйте свою историю YouTube с удовольствием и точными данными о времени!**
+**🎬 Analyze your YouTube history with pleasure and accurate time data!**
