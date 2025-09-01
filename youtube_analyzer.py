@@ -207,12 +207,753 @@ class YouTubeAnalyzer:
         
         self.console.print(f"[bold blue]Получаю длительность для {sample_size} видео...[/bold blue]")
         
-        # Берем случайную выборку
-        sample = self.df.sample(min(sample_size, len(self.df)))
+        # Фильтруем видео с доступными каналами (не Unknown)
+        available_videos = self.df[self.df['channel'] != 'Unknown'].copy()
         
-        # Здесь можно добавить логику получения длительности через yt-dlp
-        # Пока просто показываем статистику
-        self.console.print(f"[green]✓ Выборка из {len(sample)} видео готова для анализа длительности[/green]")
+        if len(available_videos) == 0:
+            self.console.print("[red]Нет доступных видео с известными каналами![/red]")
+            return
+        
+        # Берем случайную выборку из доступных видео
+        sample_size = min(sample_size, len(available_videos))
+        sample = available_videos.sample(sample_size)
+        
+        self.console.print(f"[blue]Выбрано {len(sample)} видео с доступными каналами[/blue]")
+        self.console.print(f"[blue]Всего доступных видео: {len(available_videos)}[/blue]")
+        
+        # Получаем длительность через curl
+        self.get_durations_api(sample)
+    
+    def get_durations_ytdlp(self, sample_df) -> None:
+        """Получение длительности через yt-dlp"""
+        try:
+            import yt_dlp
+            
+            self.console.print("[blue]Используется yt-dlp для получения длительности...[/blue]")
+            
+            # Настройки yt-dlp для получения метаданных (рабочая версия)
+            ydl_opts = {
+                'quiet': False,  # Включаем вывод для отладки
+                'no_warnings': False,  # Показываем предупреждения
+                'skip_download': True,
+                'verbose': True,  # Подробный вывод
+                'ignoreerrors': True,  # Продолжаем при ошибках
+                'listformats': True,  # Получаем список форматов (включает метаданные)
+            }
+            
+            # Добавляем cookies если есть
+            cookies_file = Path("youtube_cookies.txt")  # Ваш основной файл cookies
+            if cookies_file.exists():
+                # Создаем временную копию для yt-dlp
+                import shutil
+                temp_cookies = Path("temp_cookies.txt")
+                shutil.copy2(cookies_file, temp_cookies)
+                
+                ydl_opts['cookiefile'] = str(temp_cookies)
+                self.console.print("[green]✓ Используются cookies для авторизации[/green]")
+                self.console.print("[blue]Создана временная копия cookies для yt-dlp[/blue]")
+            else:
+                self.console.print("[yellow]⚠️ Файл youtube_cookies.txt не найден![/yellow]")
+                self.console.print("[yellow]Создайте файл youtube_cookies.txt для обхода блокировок[/yellow]")
+                self.show_cookies_instructions()
+            
+            # Добавляем user-agent и заголовки
+            ydl_opts['http_headers'] = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            }
+            
+            # Добавляем прокси если нужно (раскомментируйте при необходимости)
+            # ydl_opts['proxy'] = 'socks5://127.0.0.1:1080'
+            
+            # Добавляем задержки между запросами
+            ydl_opts['sleep_interval'] = 1
+            ydl_opts['max_sleep_interval'] = 3
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                processed = 0
+                total = len(sample_df)
+                
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=self.console
+                ) as progress:
+                    task = progress.add_task("Получение длительности...", total=total)
+                    
+                    for _, row in sample_df.iterrows():
+                        video_id = row['video_id']
+                        video_url = row['url']
+                        
+                        try:
+                            # Получаем информацию о видео
+                            self.console.print(f"\n[blue]🔍 Получаю информацию для: {row['title'][:50]}...[/blue]")
+                            self.console.print(f"[blue]URL: {video_url}[/blue]")
+                            
+                            # Получаем информацию в extract_flat режиме
+                            info = ydl.extract_info(video_url, download=False)
+                            
+                            if info and 'duration' in info:
+                                duration = info['duration']
+                                self.video_durations[video_id] = duration
+                                
+                                # Показываем прогресс
+                                minutes = duration // 60
+                                seconds = duration % 60
+                                progress.update(task, description=f"✓ {row['title'][:30]}... ({minutes}:{seconds:02d})")
+                            else:
+                                progress.update(task, description=f"❌ {row['title'][:30]}... (длительность не найдена)")
+                            
+                            processed += 1
+                            
+                        except Exception as e:
+                            progress.update(task, description=f"❌ {row['title'][:30]}... (ошибка: {str(e)[:20]})")
+                            self.console.print(f"[red]❌ Ошибка: {str(e)}[/red]")
+                            processed += 1
+                        
+                        progress.advance(task)
+                        
+                        # Небольшая задержка чтобы не перегружать YouTube
+                        import time
+                        time.sleep(1)
+                
+                self.console.print(f"\n[green]✓ Получена длительность для {len(self.video_durations)} из {total} видео[/green]")
+                
+                # Очищаем временный файл cookies
+                temp_cookies = Path("temp_cookies.txt")
+                if temp_cookies.exists():
+                    temp_cookies.unlink()
+                    self.console.print("[blue]✓ Временный файл cookies удален[/blue]")
+                
+                if self.video_durations:
+                    self.show_duration_statistics()
+                else:
+                    self.console.print("[yellow]⚠️ Не удалось получить длительность ни для одного видео[/yellow]")
+                    self.console.print("[yellow]Возможные причины:[/yellow]")
+                    self.console.print("[yellow]  - Google блокирует запросы[/yellow]")
+                    self.console.print("[yellow]  - Неправильные cookies[/yellow]")
+                    self.console.print("[yellow]  - Видео недоступны[/yellow]")
+                    self.show_cookies_instructions()
+            
+        except ImportError:
+            self.console.print("[red]yt-dlp не установлен! Установите: pip install yt-dlp[/red]")
+        except Exception as e:
+            self.console.print(f"[red]Ошибка при использовании yt-dlp: {e}[/red]")
+            self.console.print("[yellow]Попробуйте обновить cookies или использовать VPN[/yellow]")
+        
+    def show_cookies_instructions(self) -> None:
+        """Показ инструкций по настройке cookies"""
+        self.console.print("\n[bold blue]🍪 Инструкция по настройке cookies:[/bold blue]")
+        self.console.print("1. Установите расширение 'Get cookies.txt' в браузере")
+        self.console.print("2. Зайдите на YouTube и войдите в аккаунт")
+        self.console.print("3. Экспортируйте cookies в файл youtube_cookies.txt")
+        self.console.print("4. Поместите файл в папку проекта")
+        self.console.print("5. Перезапустите анализатор")
+        self.console.print("\n[blue]Подробные инструкции: см. файл COOKIES_INSTRUCTIONS.md[/blue]")
+    
+    def show_api_instructions(self) -> None:
+        """Показывает инструкции по настройке YouTube API"""
+        self.console.print("\n🍪 Инструкция по настройке YouTube API:")
+        self.console.print("1. Перейдите на https://console.developers.google.com/")
+        self.console.print("2. Создайте новый проект или выберите существующий")
+        self.console.print("3. Включите YouTube Data API v3")
+        self.console.print("4. Создайте учетные данные (API ключ)")
+        self.console.print("5. Скопируйте API ключ в файл youtube_api_key.txt")
+        self.console.print("6. Поместите файл в папку проекта")
+        self.console.print("7. Перезапустите анализатор")
+        self.console.print("\n[blue]Подробные инструкции: см. файл API_INSTRUCTIONS.md[/blue]")
+    
+    def parse_iso_duration(self, duration_str: str) -> int:
+        """Парсит длительность в формате ISO 8601 (PT3M7S) в секунды"""
+        try:
+            import re
+            
+            # Убираем префикс PT
+            if not duration_str.startswith('PT'):
+                return 0
+            
+            duration_str = duration_str[2:]  # Убираем 'PT'
+            
+            total_seconds = 0
+            
+            # Ищем часы (H)
+            hours_match = re.search(r'(\d+)H', duration_str)
+            if hours_match:
+                total_seconds += int(hours_match.group(1)) * 3600
+                duration_str = duration_str.replace(hours_match.group(0), '')
+            
+            # Ищем минуты (M)
+            minutes_match = re.search(r'(\d+)M', duration_str)
+            if minutes_match:
+                total_seconds += int(minutes_match.group(1)) * 60
+                duration_str = duration_str.replace(minutes_match.group(0), '')
+            
+            # Ищем секунды (S)
+            seconds_match = re.search(r'(\d+)S', duration_str)
+            if seconds_match:
+                total_seconds += int(seconds_match.group(1))
+            
+            return total_seconds
+            
+        except Exception as e:
+            self.console.print(f"[red]❌ Ошибка парсинга ISO длительности: {e}[/red]")
+            return 0
+    
+    def get_durations_api(self, sample_df) -> None:
+        """Получение длительности через YouTube Data API v3"""
+        try:
+            import requests
+            import json
+            import time
+            
+            # Проверяем наличие API ключа
+            api_key_file = Path("youtube_api_key.txt")
+            if not api_key_file.exists():
+                self.console.print("[red]❌ Файл youtube_api_key.txt не найден![/red]")
+                self.console.print("[yellow]Создайте файл с API ключом YouTube Data API v3[/yellow]")
+                self.show_api_instructions()
+                return
+            
+            with open(api_key_file, 'r') as f:
+                api_key = f.read().strip()
+            
+            if not api_key:
+                self.console.print("[red]❌ API ключ пустой![/red]")
+                self.show_api_instructions()
+                return
+            
+            self.console.print("[green]✓ Используется YouTube Data API v3[/green]")
+            
+            processed = 0
+            total = len(sample_df)
+            
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=self.console
+            ) as progress:
+                task = progress.add_task("Получение длительности через API...", total=total)
+                
+                for _, row in sample_df.iterrows():
+                    video_id = row['video_id']
+                    
+                    try:
+                        # Формируем URL для API запроса
+                        api_url = f"https://www.googleapis.com/youtube/v3/videos"
+                        params = {
+                            'id': video_id,
+                            'key': api_key,
+                            'part': 'contentDetails,statistics'
+                        }
+                        
+                        response = requests.get(api_url, params=params, timeout=10)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            
+                            if data.get('items') and len(data['items']) > 0:
+                                video_info = data['items'][0]
+                                content_details = video_info.get('contentDetails', {})
+                                
+                                # Получаем длительность в формате ISO 8601 (PT3M7S)
+                                duration_str = content_details.get('duration', '')
+                                
+                                if duration_str:
+                                    duration_seconds = self.parse_iso_duration(duration_str)
+                                    
+                                    if duration_seconds > 0:
+                                        self.video_durations[video_id] = duration_seconds
+                                        minutes = duration_seconds // 60
+                                        seconds = duration_seconds % 60
+                                        progress.update(task, description=f"✓ {row['title'][:30]}... ({minutes}:{seconds:02d})")
+                                    else:
+                                        progress.update(task, description=f"❌ {row['title'][:30]}... (ошибка парсинга)")
+                                else:
+                                    progress.update(task, description=f"❌ {row['title'][:30]}... (длительность не найдена)")
+                            else:
+                                progress.update(task, description=f"❌ {row['title'][:30]}... (видео недоступно)")
+                        else:
+                            error_msg = f"HTTP {response.status_code}"
+                            if response.status_code == 403:
+                                error_msg = "API ключ недействителен или превышен лимит"
+                            elif response.status_code == 400:
+                                error_msg = "Неверный запрос"
+                            
+                            progress.update(task, description=f"❌ {row['title'][:30]}... ({error_msg})")
+                            
+                            if response.status_code == 403:
+                                self.console.print(f"[red]❌ Ошибка API: {error_msg}[/red]")
+                                self.console.print("[yellow]Проверьте API ключ и лимиты[/yellow]")
+                                break
+                        
+                        processed += 1
+                        
+                    except requests.exceptions.Timeout:
+                        progress.update(task, description=f"❌ {row['title'][:30]}... (таймаут)")
+                        processed += 1
+                    except requests.exceptions.RequestException as e:
+                        progress.update(task, description=f"❌ {row['title'][:30]}... (ошибка сети)")
+                        processed += 1
+                    except Exception as e:
+                        progress.update(task, description=f"❌ {row['title'][:30]}... (ошибка: {str(e)[:20]})")
+                        processed += 1
+                    
+                    progress.advance(task)
+                    
+                    # Небольшая задержка между запросами (API позволяет до 10,000 запросов в день)
+                    time.sleep(0.1)
+                
+                self.console.print(f"\n[green]✓ Получена длительность для {len(self.video_durations)} из {total} видео[/green]")
+                
+                if self.video_durations:
+                    self.show_duration_statistics()
+                else:
+                    self.console.print("[yellow]⚠️ Не удалось получить длительность ни для одного видео[/yellow]")
+                    self.console.print("[yellow]Возможные причины:[/yellow]")
+                    self.console.print("[yellow]  - Неверный API ключ[/yellow]")
+                    self.console.print("[yellow]  - Превышен лимит API запросов[/yellow]")
+                    self.console.print("[yellow]  - Видео недоступны[/yellow]")
+                    self.show_api_instructions()
+            
+        except Exception as e:
+            self.console.print(f"[red]Ошибка при использовании API: {e}[/red]")
+            self.console.print("[yellow]Убедитесь, что установлен модуль requests[/yellow]")
+    
+    def extract_duration_from_html(self, html_content: str) -> int:
+        """Извлечение длительности из HTML страницы YouTube"""
+        try:
+            # Ищем различные паттерны длительности
+            patterns = [
+                r'"lengthSeconds":"(\d+)"',  # JSON в HTML
+                r'"lengthSeconds":(\d+)',  # JSON без кавычек
+                r'"duration":"PT(\d+)M(\d+)S"',  # ISO 8601 формат
+                r'"duration":"PT(\d+)H(\d+)M(\d+)S"',  # ISO 8601 с часами
+                r'<meta property="og:video:duration" content="(\d+)"',  # Open Graph
+                r'"duration":"(\d+)"',  # Простой формат
+                r'data-duration="(\d+)"',  # Data атрибут
+                r'"duration":(\d+)',  # Без кавычек
+            ]
+            
+            # Отладка: показываем найденные совпадения
+            found_patterns = []
+            
+            for i, pattern in enumerate(patterns):
+                matches = re.findall(pattern, html_content)
+                if matches:
+                    found_patterns.append(f"Паттерн {i+1}: {pattern} -> {matches[:3]}")  # Показываем первые 3 совпадения
+            
+            if found_patterns:
+                self.console.print(f"[blue]Найдены паттерны: {found_patterns[:2]}[/blue]")  # Показываем первые 2
+            
+            # Ищем длительность
+            for pattern in patterns:
+                match = re.search(pattern, html_content)
+                if match:
+                    try:
+                        if 'H' in pattern:  # Формат с часами
+                            hours = int(match.group(1))
+                            minutes = int(match.group(2))
+                            seconds = int(match.group(3))
+                            result = hours * 3600 + minutes * 60 + seconds
+                            self.console.print(f"[green]✓ Длительность найдена: {hours}ч {minutes}м {seconds}с = {result}с[/green]")
+                            return result
+                        elif 'M' in pattern and 'S' in pattern:  # Формат с минутами и секундами
+                            minutes = int(match.group(1))
+                            seconds = int(match.group(2))
+                            result = minutes * 60 + seconds
+                            self.console.print(f"[green]✓ Длительность найдена: {minutes}м {seconds}с = {result}с[/green]")
+                            return result
+                        else:  # Простой формат в секундах
+                            result = int(match.group(1))
+                            self.console.print(f"[green]✓ Длительность найдена: {result}с[/green]")
+                            return result
+                    except (ValueError, IndexError) as e:
+                        self.console.print(f"[yellow]⚠️ Ошибка парсинга паттерна {pattern}: {e}[/yellow]")
+                        continue
+            
+            # Если не нашли, возвращаем 0
+            self.console.print("[red]❌ Длительность не найдена ни одним паттерном[/red]")
+            return 0
+            
+        except Exception as e:
+            self.console.print(f"[red]❌ Ошибка в extract_duration_from_html: {e}[/red]")
+            return 0
+    
+    def get_durations_selenium(self, sample_df) -> None:
+        """Получение длительности через Selenium (с браузером)"""
+        try:
+            from selenium import webdriver
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support.ui import WebDriverWait
+            from selenium.webdriver.support import expected_conditions as EC
+            from selenium.webdriver.chrome.service import Service
+            from webdriver_manager.chrome import ChromeDriverManager
+            from selenium.webdriver.chrome.options import Options
+            
+            self.console.print("[blue]Используется Selenium для получения длительности...[/blue]")
+            self.console.print("[yellow]Этот метод медленнее, но более надежен для обхода блокировок[/yellow]")
+            
+            # Настройки Chrome
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")  # Фоновый режим
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--window-size=1920,1080")
+            
+            # Добавляем user-agent
+            chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+            
+            # Проверяем наличие cookies
+            cookies_file = Path("cookies.txt")
+            if cookies_file.exists():
+                self.console.print("[green]✓ Найден файл cookies.txt - будет использован для авторизации[/green]")
+            
+            try:
+                # Автоматическая установка драйвера
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+                
+                # Загружаем cookies если есть
+                if cookies_file.exists():
+                    driver.get("https://www.youtube.com")
+                    with open(cookies_file, 'r') as f:
+                        for line in f:
+                            if line.startswith('#') or not line.strip():
+                                continue
+                            try:
+                                parts = line.strip().split('\t')
+                                if len(parts) >= 7:
+                                    cookie = {
+                                        'name': parts[5],
+                                        'value': parts[6],
+                                        'domain': parts[0],
+                                        'path': parts[2]
+                                    }
+                                    driver.add_cookie(cookie)
+                            except:
+                                continue
+                    self.console.print("[green]✓ Cookies загружены в браузер[/green]")
+                
+                processed = 0
+                total = len(sample_df)
+                
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=self.console
+                ) as progress:
+                    task = progress.add_task("Получение длительности через браузер...", total=total)
+                    
+                    for _, row in sample_df.iterrows():
+                        video_url = row['url']
+                        video_id = row['video_id']
+                        
+                        try:
+                            # Открываем страницу видео
+                            driver.get(video_url)
+                            
+                            # Ждем загрузки страницы
+                            WebDriverWait(driver, 10).until(
+                                EC.presence_of_element_located((By.TAG_NAME, "body"))
+                            )
+                            
+                            # Ищем элемент с длительностью
+                            try:
+                                duration_element = WebDriverWait(driver, 5).until(
+                                    EC.presence_of_element_located((By.CSS_SELECTOR, "span.ytp-time-duration"))
+                                )
+                                duration_text = duration_element.text
+                                
+                                # Парсим длительность (формат: MM:SS или H:MM:SS)
+                                duration = self.parse_duration(duration_text)
+                                
+                                if duration > 0:
+                                    self.video_durations[video_id] = duration
+                                    progress.update(task, description=f"✓ {row['title'][:30]}... ({duration_text})")
+                                else:
+                                    progress.update(task, description=f"❌ {row['title'][:30]}... (длительность не найдена)")
+                                
+                            except:
+                                progress.update(task, description=f"❌ {row['title'][:30]}... (длительность не найдена)")
+                            
+                            processed += 1
+                            
+                        except Exception as e:
+                            progress.update(task, description=f"❌ {row['title'][:30]}... (ошибка: {str(e)[:20]})")
+                            processed += 1
+                        
+                        progress.advance(task)
+                        
+                        # Задержка между запросами
+                        import time
+                        time.sleep(1)
+                
+                driver.quit()
+                
+                self.console.print(f"\n[green]✓ Получена длительность для {len(self.video_durations)} из {total} видео[/green]")
+                
+                if self.video_durations:
+                    self.show_duration_statistics()
+                
+            except Exception as e:
+                self.console.print(f"[red]Ошибка при запуске браузера: {e}[/red]")
+                self.console.print("[yellow]Попробуйте установить Chrome или использовать другой метод[/yellow]")
+                
+        except ImportError:
+            self.console.print("[red]Selenium не установлен! Установите: pip install selenium webdriver-manager[/red]")
+        except Exception as e:
+            self.console.print(f"[red]Ошибка при использовании Selenium: {e}[/red]")
+    
+    def get_durations_manual(self, sample_df) -> None:
+        """Ручной ввод длительности для тестирования"""
+        self.console.print("[blue]Ручной режим для тестирования...[/blue]")
+        self.console.print("[yellow]Введите длительность в формате MM:SS или H:MM:SS[/yellow]")
+        
+        processed = 0
+        total = min(5, len(sample_df))  # Ограничиваем для тестирования
+        
+        for i, (_, row) in enumerate(sample_df.head(total).iterrows()):
+            self.console.print(f"\n[{i+1}/{total}] {row['title'][:50]}...")
+            self.console.print(f"URL: {row['url']}")
+            
+            duration_input = input("Длительность (MM:SS или Enter для пропуска): ").strip()
+            
+            if duration_input:
+                try:
+                    duration = self.parse_duration(duration_input)
+                    if duration > 0:
+                        self.video_durations[row['video_id']] = duration
+                        self.console.print(f"[green]✓ Длительность: {duration_input} ({duration} сек)[/green]")
+                        processed += 1
+                    else:
+                        self.console.print("[red]❌ Неверный формат длительности[/red]")
+                except:
+                    self.console.print("[red]❌ Неверный формат длительности[/red]")
+            else:
+                self.console.print("[yellow]Пропущено[/yellow]")
+        
+        self.console.print(f"\n[green]✓ Обработано {processed} видео[/green]")
+        
+        if self.video_durations:
+            self.show_duration_statistics()
+    
+    def parse_duration(self, duration_text: str) -> int:
+        """Парсинг длительности из текста в секунды"""
+        try:
+            parts = duration_text.split(':')
+            if len(parts) == 2:  # MM:SS
+                minutes = int(parts[0])
+                seconds = int(parts[1])
+                return minutes * 60 + seconds
+            elif len(parts) == 3:  # H:MM:SS
+                hours = int(parts[0])
+                minutes = int(parts[1])
+                seconds = int(parts[2])
+                return hours * 3600 + minutes * 60 + seconds
+            else:
+                return 0
+        except:
+            return 0
+    
+    def show_duration_statistics(self) -> None:
+        """Показ статистики по длительности видео"""
+        if not self.video_durations:
+            return
+        
+        self.console.print("\n[bold blue]📊 Статистика по длительности видео[/bold blue]")
+        
+        durations = list(self.video_durations.values())
+        total_duration = sum(durations)
+        avg_duration = total_duration / len(durations)
+        
+        # Конвертируем в часы, минуты, секунды
+        total_hours = total_duration // 3600
+        total_minutes = (total_duration % 3600) // 60
+        total_seconds = total_duration % 60
+        
+        avg_minutes = avg_duration // 60
+        avg_seconds = avg_duration % 60
+        
+        # Создаем таблицу статистики
+        table = Table(title="Статистика длительности")
+        table.add_column("Параметр", style="cyan")
+        table.add_column("Значение", style="green")
+        
+        table.add_row("Всего видео с длительностью", str(len(durations)))
+        table.add_row("Общее время просмотра", f"{total_hours}ч {total_minutes}м {total_seconds}с")
+        table.add_row("Средняя длительность", f"{avg_minutes}м {avg_seconds}с")
+        table.add_row("Самое короткое видео", f"{min(durations) // 60}м {min(durations) % 60}с")
+        table.add_row("Самое длинное видео", f"{max(durations) // 60}м {max(durations) % 60}с")
+        
+        self.console.print(table)
+        
+        # Показываем распределение по длительности
+        self.console.print("\n[bold blue]📈 Распределение по длительности[/bold blue]")
+        
+        # Группируем по диапазонам
+        ranges = {
+            "0-5 мин": 0,
+            "5-15 мин": 0,
+            "15-30 мин": 0,
+            "30-60 мин": 0,
+            "60+ мин": 0
+        }
+        
+        for duration in durations:
+            minutes = duration // 60
+            if minutes < 5:
+                ranges["0-5 мин"] += 1
+            elif minutes < 15:
+                ranges["5-15 мин"] += 1
+            elif minutes < 30:
+                ranges["15-30 мин"] += 1
+            elif minutes < 60:
+                ranges["30-60 мин"] += 1
+            else:
+                ranges["60+ мин"] += 1
+        
+        for range_name, count in ranges.items():
+            percentage = (count / len(durations)) * 100
+            self.console.print(f"  {range_name}: {count} видео ({percentage:.1f}%)")
+        
+        # Сохраняем длительности в CSV для дальнейшего анализа
+        if self.df is not None:
+            self.save_durations_to_csv()
+        
+        # Показываем общую статистику времени просмотра
+        self.show_total_watch_time_summary()
+    
+    def show_total_watch_time_summary(self) -> None:
+        """Показывает сводку по общему времени просмотра"""
+        if not self.video_durations:
+            self.console.print("[yellow]Нет данных о длительности для подсчета общего времени[/yellow]")
+            return
+        
+        watch_stats = self.calculate_total_watch_time()
+        
+        self.console.print("\n[bold blue]⏰ СВОДКА ПО ВРЕМЕНИ ПРОСМОТРА[/bold blue]")
+        
+        # Создаем таблицу сводки
+        summary_table = Table(title="Общее время просмотра")
+        summary_table.add_column("Параметр", style="cyan")
+        summary_table.add_column("Значение", style="green")
+        
+        summary_table.add_row("Всего видео в истории", str(watch_stats['total_videos']))
+        summary_table.add_row("Видео с известной длительностью", str(len(self.video_durations)))
+        summary_table.add_row("Видео без данных о длительности", str(watch_stats['total_videos'] - len(self.video_durations)))
+        summary_table.add_row("Общее время (известные видео)", watch_stats['total_duration_formatted'])
+        summary_table.add_row("Средняя длительность видео", watch_stats['avg_duration_formatted'])
+        summary_table.add_row("Оценка общего времени", watch_stats['estimated_total_time_formatted'])
+        
+        self.console.print(summary_table)
+        
+        # Дополнительная информация
+        if watch_stats['total_videos'] > len(self.video_durations):
+            coverage_percent = (len(self.video_durations) / watch_stats['total_videos']) * 100
+            self.console.print(f"\n[blue]📊 Покрытие данных: {coverage_percent:.1f}%[/blue]")
+            self.console.print(f"[yellow]⚠️ Для {watch_stats['total_videos'] - len(self.video_durations)} видео длительность неизвестна[/yellow]")
+            self.console.print(f"[yellow]   Общее время рассчитано с учетом оценки на основе средней длительности[/yellow]")
+    
+    def calculate_total_watch_time(self) -> dict:
+        """Вычисляет общее время просмотра за исследуемый период"""
+        if not self.video_durations or self.df is None:
+            return {
+                'total_videos': 0,
+                'total_duration': 0,
+                'total_duration_formatted': '0 часов 0 минут',
+                'avg_duration': 0,
+                'avg_duration_formatted': '0 минут',
+                'estimated_total_time': 0,
+                'estimated_total_time_formatted': '0 часов 0 минут'
+            }
+        
+        # Время для видео с известной длительностью
+        known_durations = list(self.video_durations.values())
+        total_known_duration = sum(known_durations)
+        total_known_videos = len(known_durations)
+        total_videos = len(self.df)
+        
+        # Оценка общего времени (предполагаем, что неизвестные видео имеют среднюю длительность)
+        if total_known_videos > 0:
+            avg_duration = total_known_duration / total_known_videos
+            unknown_videos = total_videos - total_known_videos
+            estimated_unknown_duration = unknown_videos * avg_duration
+            estimated_total_duration = total_known_duration + estimated_unknown_duration
+        else:
+            estimated_total_duration = 0
+            avg_duration = 0
+        
+        # Вычисляем процент покрытия
+        coverage_percent = (total_known_videos / total_videos * 100) if total_videos > 0 else 0
+        
+        return {
+            'total_videos': total_videos,
+            'total_duration': total_known_duration,
+            'total_duration_formatted': self.format_duration(total_known_duration),
+            'avg_duration': avg_duration,
+            'avg_duration_formatted': self.format_duration(avg_duration),
+            'estimated_total_time': estimated_total_duration,
+            'estimated_total_time_formatted': self.format_duration(estimated_total_duration),
+            'coverage_percent': coverage_percent
+        }
+    
+    def format_duration(self, seconds: int) -> str:
+        """Форматирует длительность в секундах в читаемый вид"""
+        if seconds < 60:
+            return f"{seconds} секунд"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            remaining_seconds = seconds % 60
+            if remaining_seconds == 0:
+                return f"{minutes} минут"
+            else:
+                return f"{minutes} минут {remaining_seconds} секунд"
+        else:
+            hours = seconds // 3600
+            remaining_minutes = (seconds % 3600) // 60
+            remaining_seconds = seconds % 60
+            if remaining_minutes == 0 and remaining_seconds == 0:
+                return f"{hours} часов"
+            elif remaining_seconds == 0:
+                return f"{hours} часов {remaining_minutes} минут"
+            else:
+                return f"{hours} часов {remaining_minutes} минут {remaining_seconds} секунд"
+    
+    def save_durations_to_csv(self) -> None:
+        """Сохранение длительностей видео в CSV"""
+        if not self.video_durations:
+            return
+        
+        # Создаем DataFrame с длительностями
+        durations_data = []
+        for video_id, duration in self.video_durations.items():
+            video_row = self.df[self.df['video_id'] == video_id]
+            if not video_row.empty:
+                row = video_row.iloc[0]
+                durations_data.append({
+                    'video_id': video_id,
+                    'title': row['title'],
+                    'channel': row['channel'],
+                    'url': row['url'],
+                    'duration_seconds': duration,
+                    'duration_formatted': f"{duration // 60}:{duration % 60:02d}",
+                    'timestamp': row['timestamp'],
+                    'source': row.get('source', 'unknown')
+                })
+        
+        if durations_data:
+            durations_df = pd.DataFrame(durations_data)
+            csv_path = self.output_dir / "video_durations.csv"
+            durations_df.to_csv(csv_path, index=False, encoding='utf-8-sig')
+            
+            self.console.print(f"\n[green]✓ Длительности сохранены в: {csv_path}[/green]")
+            self.console.print(f"[blue]Размер файла: {csv_path.stat().st_size / 1024:.1f} KB[/blue]")
     
     def create_plots(self) -> None:
         """Создание графиков"""
@@ -483,6 +1224,82 @@ class YouTubeAnalyzer:
         </div>
         
         <div class="section">
+            <h2>⏰ Статистика по длительности видео</h2>
+"""
+        
+        # Добавляем статистику по длительности, если есть данные
+        if hasattr(self, 'video_durations') and self.video_durations:
+            watch_stats = self.calculate_total_watch_time()
+            
+            html_content += f"""
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">{len(self.video_durations):,}</div>
+                    <div class="stat-label">Видео с известной длительностью</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{watch_stats['total_videos'] - len(self.video_durations):,}</div>
+                    <div class="stat-label">Видео без данных о длительности</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{watch_stats['coverage_percent']:.1f}%</div>
+                    <div class="stat-label">Покрытие данных</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{watch_stats['avg_duration_formatted']}</div>
+                    <div class="stat-label">Средняя длительность</div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>📊 Время просмотра</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">{watch_stats['total_duration_formatted']}</div>
+                        <div class="stat-label">Общее время (известные видео)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{watch_stats['estimated_total_time_formatted']}</div>
+                        <div class="stat-label">Оценка общего времени</div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>🏆 Топ-10 самых длинных видео</h3>
+                    <div class="top-channels">
+"""
+            
+            # Добавляем топ-10 самых длинных видео
+            sorted_durations = sorted(self.video_durations.items(), key=lambda x: x[1], reverse=True)
+            for i, (video_id, duration) in enumerate(sorted_durations[:10], 1):
+                video_row = self.df[self.df['video_id'] == video_id]
+                if not video_row.empty:
+                    title = video_row.iloc[0]['title'][:50] + "..." if len(video_row.iloc[0]['title']) > 50 else video_row.iloc[0]['title']
+                    channel = video_row.iloc[0]['channel']
+                    duration_formatted = self.format_duration(duration)
+                    
+                    html_content += f"""
+                        <div class="channel-card">
+                            <div class="channel-name">{title}</div>
+                            <div class="channel-count">{duration_formatted}</div>
+                            <div style="font-size: 0.9em; color: #666; margin-top: 5px;">{channel}</div>
+                        </div>
+"""
+            
+            html_content += """
+                    </div>
+                </div>
+            </div>
+"""
+        else:
+            html_content += """
+            <p><em>Данные о длительности видео не были получены. Используйте функцию "Получить длительность видео" для анализа времени просмотра.</em></p>
+"""
+        
+        html_content += """
+        </div>
+        
+        <div class="section">
             <h2>📊 Дополнительная статистика</h2>
             <p><strong>Период анализа:</strong> {stats['date_range']}</p>
             <p><strong>Источники данных:</strong></p>
@@ -554,6 +1371,16 @@ class YouTubeAnalyzer:
             'day_of_week_ru': 'День_недели_РУ'
         })
         
+        # Добавляем информацию о длительности, если есть
+        if hasattr(self, 'video_durations') and self.video_durations:
+            export_df['duration_seconds'] = export_df['ID_видео'].map(self.video_durations)
+            export_df['duration_formatted'] = export_df['duration_seconds'].apply(
+                lambda x: self.format_duration(x) if pd.notna(x) else 'Неизвестно'
+            )
+            export_df['duration_minutes'] = export_df['duration_seconds'].apply(
+                lambda x: round(x / 60, 1) if pd.notna(x) else None
+            )
+        
         # Выбираем и переупорядочиваем колонки для экспорта
         columns_order = [
             'ID_видео',
@@ -568,6 +1395,10 @@ class YouTubeAnalyzer:
             'Источник_данных',
             'Дата_время_UTC'
         ]
+        
+        # Добавляем колонки длительности, если есть
+        if hasattr(self, 'video_durations') and self.video_durations:
+            columns_order.extend(['duration_seconds', 'duration_formatted', 'duration_minutes'])
         
         # Добавляем колонки, которые могут отсутствовать
         available_columns = [col for col in columns_order if col in export_df.columns]

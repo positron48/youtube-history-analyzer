@@ -3,3 +3,4 @@ instruct.md
 youtube_analysis_output/
 Takeout/
 __pycache__/
+youtube_api_key.txt
