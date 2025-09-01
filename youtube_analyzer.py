@@ -1075,8 +1075,33 @@ class YouTubeAnalyzer:
             fig2 = None
         
         # График 3: Активность по дням недели
-        day_stats = self.df.groupby('day_of_week').size()
-        day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        # Создаем маппинг английских названий на локализованные
+        day_mapping = {
+            'Monday': get_text(self.language, 'monday'),
+            'Tuesday': get_text(self.language, 'tuesday'),
+            'Wednesday': get_text(self.language, 'wednesday'),
+            'Thursday': get_text(self.language, 'thursday'),
+            'Friday': get_text(self.language, 'friday'),
+            'Saturday': get_text(self.language, 'saturday'),
+            'Sunday': get_text(self.language, 'sunday')
+        }
+        
+        # Создаем временную колонку с локализованными названиями для группировки
+        temp_df = self.df.copy()
+        temp_df['day_of_week_local'] = temp_df['day_of_week'].map(day_mapping)
+        
+        day_stats = temp_df.groupby('day_of_week_local').size()
+        
+        # Создаем локализованный порядок дней недели
+        day_order = [
+            get_text(self.language, 'monday'),
+            get_text(self.language, 'tuesday'),
+            get_text(self.language, 'wednesday'),
+            get_text(self.language, 'thursday'),
+            get_text(self.language, 'friday'),
+            get_text(self.language, 'saturday'),
+            get_text(self.language, 'sunday')
+        ]
         day_stats = day_stats.reindex(day_order)
         
         fig3 = go.Figure(data=[
@@ -1220,24 +1245,24 @@ class YouTubeAnalyzer:
 </head>
 <body>
     <div class="container">
-        <h1>📊 Анализ истории YouTube</h1>
+        <h1>📊 {get_text(self.language, 'youtube_analysis')}</h1>
         
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-number">{stats['total_videos']:,}</div>
-                <div class="stat-label">Всего видео</div>
+                <div class="stat-label">{get_text(self.language, 'total_videos_label')}</div>
             </div>
             <div class="stat-card">
                 <div class="stat-number">{stats['total_days']:,}</div>
-                <div class="stat-label">Дней активности</div>
+                <div class="stat-label">{get_text(self.language, 'active_days_label')}</div>
             </div>
             <div class="stat-card">
                 <div class="stat-number">{stats['avg_videos_per_day']:.1f}</div>
-                <div class="stat-label">Среднее видео в день</div>
+                <div class="stat-label">{get_text(self.language, 'avg_videos_per_day_label')}</div>
             </div>
             <div class="stat-card">
                 <div class="stat-number">{stats['unique_channels']:,}</div>
-                <div class="stat-label">Уникальных каналов</div>
+                <div class="stat-label">{get_text(self.language, 'unique_channels')}</div>
             </div>
         </div>
         
@@ -1263,7 +1288,7 @@ class YouTubeAnalyzer:
         </div>
         
         <div class="section">
-            <h2>🏆 Топ каналов</h2>
+            <h2>🏆 {get_text(self.language, 'top_channels')}</h2>
             <div class="top-channels">
 """
         
@@ -1276,12 +1301,12 @@ class YouTubeAnalyzer:
                 </div>
 """
         
-        html_content += """
+        html_content += f"""
             </div>
         </div>
         
         <div class="section">
-            <h2>⏰ Статистика по длительности видео</h2>
+            <h2>⏰ {get_text(self.language, 'video_duration_statistics')}</h2>
 """
         
         # Добавляем статистику по длительности, если есть данные
@@ -1292,44 +1317,40 @@ class YouTubeAnalyzer:
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-number">{len(self.video_durations):,}</div>
-                    <div class="stat-label">Видео с известной длительностью</div>
+                    <div class="stat-label">{get_text(self.language, 'videos_with_duration')}</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number">{watch_stats['total_videos'] - len(self.video_durations):,}</div>
-                    <div class="stat-label">Видео без данных о длительности</div>
+                    <div class="stat-label">{get_text(self.language, 'videos_without_duration')}</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number">{watch_stats['coverage_percent']:.1f}%</div>
-                    <div class="stat-label">Покрытие данных</div>
+                    <div class="stat-label">{get_text(self.language, 'data_coverage')}</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number">{watch_stats['avg_duration_formatted']}</div>
-                    <div class="stat-label">Средняя длительность</div>
+                    <div class="stat-label">{get_text(self.language, 'average_duration')}</div>
                 </div>
             </div>
             
-            <div class="section">
-                <h3>📊 {get_text(self.language, 'watch_time')}</h3>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-number">{watch_stats['total_duration_formatted']}</div>
-                        <div class="stat-label">Общее время (известные видео)</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">{watch_stats['estimated_total_time_formatted']}</div>
-                        <div class="stat-label">Оценка общего времени</div>
-                    </div>
+            <h3>📊 {get_text(self.language, 'watch_time')}</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">{watch_stats['total_duration_formatted']}</div>
+                    <div class="stat-label">{get_text(self.language, 'total_time_known_videos')}</div>
                 </div>
-                
+                <div class="stat-card">
+                    <div class="stat-number">{watch_stats['estimated_total_time_formatted']}</div>
+                    <div class="stat-label">{get_text(self.language, 'estimated_total_time')}</div>
                 </div>
             </div>
 """
         else:
-            html_content += """
-            <p><em>Данные о длительности видео не были получены. Используйте функцию "Получить длительность видео" для анализа времени просмотра.</em></p>
+            html_content += f"""
+            <p><em>{get_text(self.language, 'duration_data_not_available')}</em></p>
 """
         
-        html_content += """
+        html_content += f"""
         </div>
         
         <div class="section">
@@ -1403,9 +1424,11 @@ class YouTubeAnalyzer:
             'year': get_text(self.language, 'year'),
             'date_formatted': csv_columns['date'],
             'time_formatted': csv_columns['time'],
-            'year_month': get_text(self.language, 'year_month'),
-            'day_of_week_local': csv_columns['day_of_week']
+            'year_month': get_text(self.language, 'year_month')
         })
+        
+        # Сохраняем имя колонки дня недели для статистики
+        day_of_week_column = get_text(self.language, 'day_of_week_en')
         
         # Добавляем информацию о длительности, если есть
         if hasattr(self, 'video_durations') and self.video_durations:
@@ -1426,7 +1449,7 @@ class YouTubeAnalyzer:
             csv_columns['date'],
             csv_columns['time'],
             get_text(self.language, 'year_month'),
-            csv_columns['day_of_week'],
+            day_of_week_column,
             get_text(self.language, 'hour'),
             csv_columns['source'],
             get_text(self.language, 'datetime_utc')
@@ -1444,6 +1467,8 @@ class YouTubeAnalyzer:
         csv_path = self.output_dir / "youtube_history_export.csv"
         export_df.to_csv(csv_path, index=False, encoding='utf-8-sig')
         
+
+        
         # Создаем сводную статистику
         summary_stats = {
             get_text(self.language, 'general_statistics'): {
@@ -1454,7 +1479,7 @@ class YouTubeAnalyzer:
             },
             get_text(self.language, 'statistics_by_sources'): export_df[csv_columns['source']].value_counts().to_dict(),
             get_text(self.language, 'top_10_channels'): export_df[csv_columns['channel']].value_counts().head(10).to_dict(),
-            get_text(self.language, 'statistics_by_days'): export_df[csv_columns['day_of_week']].value_counts().to_dict(),
+            get_text(self.language, 'statistics_by_days'): export_df[day_of_week_column].value_counts().to_dict(),
             get_text(self.language, 'statistics_by_hours'): export_df[get_text(self.language, 'hour')].value_counts().sort_index().to_dict()
         }
         
@@ -1552,7 +1577,8 @@ HTML отчет с графиками и визуализацией.
             'top_channels': list(top_channels),
             'source_stats': source_stats,
             'start_date': start_date,
-            'end_date': end_date
+            'end_date': end_date,
+            'date_range': f"{start_date} - {end_date}"
         }
     
     def show_tui(self) -> None:

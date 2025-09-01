@@ -86,6 +86,15 @@ LOCALES = {
         'creating_plots': 'Создаю графики...',
         'plots_saved': '✓ Графики сохранены',
         'html_saved': '✓ HTML отчет сохранен: {path}',
+        'youtube_analysis': 'Анализ истории YouTube',
+        'video_duration_statistics': 'Статистика по длительности видео',
+        'videos_with_duration': 'Видео с известной длительностью',
+        'videos_without_duration': 'Видео без данных о длительности',
+        'data_coverage': 'Покрытие данных',
+        'average_duration': 'Средняя длительность',
+        'total_time_known_videos': 'Общее время (известные видео)',
+        'estimated_total_time': 'Оценка общего времени',
+        'duration_data_not_available': 'Данные о длительности видео не были получены. Используйте функцию "Получить длительность видео" для анализа времени просмотра.',
         
         # Экспорт CSV
         'exporting_csv': 'Экспортирую данные в CSV...',
@@ -287,6 +296,15 @@ LOCALES = {
         'creating_plots': 'Creating plots...',
         'plots_saved': '✓ Plots saved',
         'html_saved': '✓ HTML report saved to: {path}',
+        'youtube_analysis': 'YouTube History Analysis',
+        'video_duration_statistics': 'Video Duration Statistics',
+        'videos_with_duration': 'Videos with known duration',
+        'videos_without_duration': 'Videos without duration data',
+        'data_coverage': 'Data coverage',
+        'average_duration': 'Average duration',
+        'total_time_known_videos': 'Total time (known videos)',
+        'estimated_total_time': 'Estimated total time',
+        'duration_data_not_available': 'Video duration data was not obtained. Use the "Get video duration" function to analyze watch time.',
         
         # CSV export
         'exporting_csv': 'Exporting data to CSV...',
